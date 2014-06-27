@@ -1,0 +1,22 @@
+(defn zbishop-valid-captures[board [x y]]
+  (assert (is-bishop? board [x y]))
+  (assert (is-board? board))
+  (assert (valid-location? [x y]))
+  (let [color (get-color (get board [x y]))
+        location [x y]
+        ]
+    (into []  ;
+          (map (fn[loc2] [location loc2])
+               (apply concat 
+                      (remove empty?  
+                              (for [op1  [+ -] op2 [+ -]]  ;; to generate 4 diagonals
+                                (some (fn[loc]
+                                        (cond (off-board? loc))
+                                        true
+                                        (occupied-by-enemy? board loc color)
+                                        loc
+                                        true
+                                        false)))
+                              (for [z (drop 1(range))]  [(op1 x z) (op2 y z)])
+                              )
+                      ))))))
