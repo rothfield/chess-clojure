@@ -4,6 +4,7 @@
 pom.xml
 pom.xml.asc
 *.jar
+ignore*
 *.class
 /.lein-*
 /.nrepl-port
