@@ -43,6 +43,7 @@
 ;;
 ;;
 
+(def debug false)
 (defn string->board[string]
   (assert (string? string))
   (let [lines (vec (reverse (clojure.string/split-lines string)))
@@ -174,13 +175,39 @@
         ]
     [x y]))
 (println locations-helper)
+
+
+;; From wikipedia:
+;; A FEN record contains six fields. The separator between fields is a space. The fields are:
+;; Piece placement (from white's perspective). Each rank is described, starting with rank 8 and ending with rank 1; within each rank, the contents of each square are described from file "a" through file "h". Following the Standard Algebraic Notation (SAN), each piece is identified by a single letter taken from the standard English names (pawn = "P", knight = "N", bishop = "B", rook = "R", queen = "Q" and king = "K").[1] White pieces are designated using upper-case letters ("PNBRQK") while black pieces use lowercase ("pnbrqk"). Empty squares are noted using digits 1 through 8 (the number of empty squares), and "/" separates ranks.
+;; Active color. "w" means White moves next, "b" means Black.
+;; Castling availability. If neither side can castle, this is "-". Otherwise, this has one or more letters: "K" (White can castle kingside), "Q" (White can castle queenside), "k" (Black can castle kingside), and/or "q" (Black can castle queenside).
+;; En passant target square in algebraic notation. If there's no en passant target square, this is "-". If a pawn has just made a two-square move, this is the position "behind" the pawn. This is recorded regardless of whether there is a pawn in position to make an en passant capture.[2]
+;; Halfmove clock: This is the number of halfmoves since the last capture or pawn advance. This is used to determine if a draw can be claimed under the fifty-move rule.
+;; Fullmove number: The number of the full move. It starts at 1, and is incremented after Black's move.
+;; Example:
+;; rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+;; w means white to move- "side to move"
+;; The KQkq indicates all 4 castles are elegible. 
+(defn board->fen[board]
+
+  )
 (defn board->string[board]
   (assert is-board? board)
+  (str
   (reduce (fn[accum location]
             (str accum
                  (get board location " ")
-                 (if (= 7 (first location)) "\n")
-                 )) "" locations-helper))
+
+                 (if (= 7 (first location))
+                   "\n")
+                 (if (and (= 7 (first location))
+                          (not= 0 (second location)))
+                       (str (second location) " ")))
+            ) "8 " locations-helper)
+      "  abcdefgh" 
+    ))
+(println (board->string starting-board))
 ;;; to print board 0 7, 1 7,     7,7 cr
 ;;;                0 6 .........7 6 cr
 ;;;                ...
@@ -193,7 +220,6 @@
         starting-board-string
         (board->string
         (string->board starting-board-string)))))
-
 (defn on-board?[loc] (not (off-board? loc)))
 
 (defn bishop-non-captures[board location]
@@ -213,79 +239,45 @@
                                     )
                         ))))))
 
-(defn bishop-captures[board location]
-  "return list of captures that the bishop at location can make"
-  (assert (is-bishop? board location))
-  (assert (is-board? board))
-  (assert (valid-location? location))
-  (let [color (get-color (get board location))
-        [x y] location
-        ]
-    (remove nil?
-            (for [op1  [+ -] op2 [+ -]]  ;; to generate 4 diagonals
-              (loop [locs (for [z (drop 1(range))] 
-                            [(op1 x z) (op2 y z)])
-                     ]
-                (cond (off-board? (first locs))
-                      nil
-                      (occupied-by-enemy? board (first locs) color)
-                      [ location (first locs) ]
-                      (occupied? board (first locs))
-                      nil
-                      true
-                      (recur  (next locs))))))))
+(defn rook-right[x y z] [ (+ x z) y ])
 
-(defn can-move-through?[board loc]
-  (and (on-board? loc) (not (occupied? board loc))))
+(defn rook-left[x y z] [ (- x z) y ])
 
-(defn rook-non-captures[board location]
-  (println (get board location))
-  (assert (is-rook? (get board location)))
-  (assert (is-board? board))
-  (assert (valid-location? location))
-  (let [[x y] location]
-    (into []  ;
-          (map (partial vector location)
-               (concat 
-                 (take-while  (partial can-move-through? board)
-                             (for [z (drop 1(range))]  [(+ x z) y] ))
-                 (take-while  (partial can-move-through? board)
-                             (for [z (drop 1(range))]  [(- x z) y] ))
-                 (take-while  (partial can-move-through? board)
-                             (for [z (drop 1(range))]  [x (+ z y)] ))
-                 (take-while  (partial can-move-through? board)
-                             (for [z (drop 1(range))]  [x (- z y)] ))
-                 )))))
-;; (test-rook-moves)
-(defn test-rook-moves[]
-  (let [board (string->board (join "\n" 
-                                   ["  "
-                                    " R"
-                                    "  "]))
-        ]
-    (println (rook-non-captures board [1 1])))
-  )
+(defn rook-up[x y z] [ x (+ y z)])
 
-;; (test-rook-captures)
+(defn rook-down[x y z] [ x (- y z)])
 
-;; z will range from 1 to infinity
+(defn bishop-ne[x y z] [ (+ x z) (+ y z) ])
 
-(defn look-for-rook-capture[board location direction-fn]
-  ;; location is the location of the rook
-  ;; generate locations to test using a function applied to the range 1..infinity
+(defn bishop-nw[x y z] [ (- x z) (+ y z) ])
+
+(defn bishop-se[x y z] [ (+ x z) (- y z)])
+
+(defn bishop-sw[x y z] [ (- x z) (- y z)])
+
+(def bishop-rules [bishop-ne bishop-nw bishop-se bishop-sw])
+(def rook-rules [rook-right rook-left rook-up rook-down])
+
+
+(def is-ranging? #{"q" "Q" "b" "B" "r" "R"})
+
+(defn ranging-capture-in-direction[board location direction-fn]
+  ;; location is the location of the friendly piece in question 
+  ;; direction-fn generate locations to test using a function applied to the range 1..infinity
   ;; Finished when 
   ;; 1. off board - return nil
   ;; 2. friendly piece found return nil
   ;; 3. enemy piece is found - return the location of the enemy piece
   ;;
-  (when false
-    (println "entering look-for-rook-capture, direction-fn is" direction-fn))
+  (when debug 
+    (println "entering ranging-capture-in-direction, direction-fn is" direction-fn))
   (let [[x y] location
         color (get-color (get board location))
         ]
-    ;;  (println x y)
-    ;; (println board)
-    ;;(println location)
+    (when debug
+      (println x y)
+     (println (board->string board))
+    (println location))
     (loop [locs-to-test (for [z (drop 1(range))]  ;; lazy seq of locations to test
                           (direction-fn x y z))
            ]
@@ -303,20 +295,81 @@
           (recur  (next locs-to-test))))
       )))
 
-;; (f a b) -> a
-
-
-(defn rook-right[x y z] [ (+ x z) y ])
-(defn rook-left[x y z] [ (- x z) y ])
-(defn rook-up[x y z] [ x (+ y z)])
-(defn rook-down[x y z] [ x (- y z)])
-
-(defn rook-captures[board location]
+(defn ranging-captures[board location rules]
   {:pre  []
    :post [(set? %)]
    }
-  "return set of locations for captures that the rook at location can make"
-  (assert (is-rook? (get board location)))
+  "return set of locations for captures that the rook or bishop at location can make"
+  (assert (is-ranging? (get board location)))
+  (assert (is-board? board))
+  (assert (valid-location? location))
+  (let [color (get-color (get board location))
+        [x y] location
+        ]
+    (set
+     (map (fn[loc-to-capture] (vector location loc-to-capture))
+          (remove nil?
+                 (map
+                   (partial ranging-capture-in-direction board location)
+                   rules 
+                   ))))))
+
+(defn bishop-captures[board location]
+  (ranging-captures board location bishop-rules)
+)
+
+;; (test-rook-moves)
+
+;; (test-rook-captures)
+
+;; z will range from 1 to infinity
+
+
+(defn look-for-non-capture-in-direction[board location direction-fn]
+  ;; location is the location of the friendly piece in question 
+  ;; direction-fn generate locations to test using a function applied to the range 1..infinity
+  ;; Finished when 
+  ;; 1. off board 
+  ;; 2. piece found 
+  ;; Returns set of zero or more moves found
+  ;;
+  (when debug 
+    (println "entering look-for-capture-in-direction, direction-fn is" direction-fn))
+  (let [[x y] location
+        color (get-color (get board location))
+        ]
+    (when debug
+      (println x y)
+     (println (board->string board))
+    (println location))
+    (loop [locs-to-test (for [z (drop 1(range))]  ;; lazy seq of locations to test
+                          (direction-fn x y z))
+           accum []
+           ]
+      (let [loc-to-test (first locs-to-test)]
+        (when false
+          (println "processing " loc-to-test))
+        (cond 
+          (off-board? loc-to-test)
+          accum
+          (occupied? board loc-to-test)
+           accum
+          true  ;; location is empty
+          (recur  (next locs-to-test) (conj accum loc-to-test) )))
+      )))
+
+;; (f a b) -> a
+
+
+;; Pieces with a long range
+
+
+(defn ranging-non-captures[board location rules]
+  {:pre  [(vector? rules)]
+   :post [(set? %)]
+   }
+  "return set of locations for moves that the piece can make according to the rules which is an array of functions"
+  (assert (is-ranging? (get board location)))
   (assert (is-board? board))
   (assert (valid-location? location))
   (let [color (get-color (get board location))
@@ -324,9 +377,58 @@
         ]
     (set (remove nil?
                  (map
-                   (partial look-for-rook-capture board location)
-                   [rook-right rook-left rook-up rook-down]
+                   (partial ranging-capture-in-direction board location)
+                   rules 
                    )))))
+
+
+(defn rook-captures[board location]
+  {:pre  []
+   :post [(set? %)]
+   }
+  (ranging-captures board location rook-rules))
+
+(defn rook-non-captures[board location]
+  {:pre  []
+   :post [(set? %)]
+   }
+  (ranging-non-captures board location rook-rules))
+
+
+; (test-bishop-captures)
+(defn test-bishop-captures[]
+  (let [board (string->board (join "\n" 
+
+                                   ["       "
+                                    "     p"
+                                    "  p   "
+                                    "   B   b"
+                                    "  pnQ  "
+                                    "          "]))
+        ]
+    (when debug
+      (println (board->string board))
+      )
+    (is (= 
+          #{[2 1] [5 4] [2 3]}
+          (bishop-captures board [3 2])))
+    ))
+;;(def debug false)
+(defn test-rook-non-captures[]
+  (let [board (string->board (join "\n" 
+                                   ["   p    "
+                                    "  pR   b"
+                                    "  pQ    "
+                                    "        "]))
+        ]
+    (when debug
+     (println (board->string board))
+      )
+    (is (= 
+          #{[2 2] [3 3] [7 2]}
+          (rook-non-captures board [3 2])))
+    ))
+(test-rook-non-captures)
 (defn test-rook-captures[]
   (let [board (string->board (join "\n" 
                                    ["   p  "
@@ -444,18 +546,37 @@
   (assert is-color? color)
   (assert is-board? board)
   (let [ opponent-king-piece (if (= color :white) "k" "K")
-        _ (println "1")
+        debug false
         king-location (some #(if (= opponent-king-piece (second %)) 
                                (first %))
                             board)
-        _ (println "1")
         ]
+    (when debug
+      (println "in checkmated?")
+        (println (moves board color)))
     (some #(when (= (second %) king-location) true) (moves board color))
 
     ))
 
 ;;;;;;;;;;;;;; TESTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn test-rook-captures2[]
+  (is (= 
+       #{[[1 0] [0 0]]} 
+        (rook-captures (string->board (str "BR\n"
+                                           "kR")) [1 0])))
+  )
+;; (test-rook-captures2)
+(defn test-rook-moves[]
+  (let [board (string->board (join "\n" 
+                                   ["  "
+                                    " R"
+                                    "  "]))
+        ]
+    (println (rook-non-captures board [1 1])))
+  )
 (defn test-checkmated[]
+  ;; white checkmates black
   (assert (not (checkmated? (string->board "BR\nkR") :white)))
   (assert (checkmated? (string->board "BR\n k") :white))
   )
@@ -465,9 +586,11 @@
     (map #(move->algebraic-notation board %) 
          (moves starting-board :black))))
 (defn run-tests[]
+(test-rook-captures2)
   (test-rook-moves)
   (test-pawn-moves)
   (test-checkmated)
+  (test-bishop-captures)
   (test-rook-captures)
 (test-board->string)
   (test-starting-moves)
