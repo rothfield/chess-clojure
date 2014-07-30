@@ -44,6 +44,7 @@
 ;;
 
 (def debug false)
+
 (defn string->board[string]
   (assert (string? string))
   (let [lines (vec (reverse (clojure.string/split-lines string)))
@@ -137,19 +138,16 @@
         (white-piece? piece)
         :white
         ))
-(defn is-rook?[x]
-  (contains? #{"R" "r"} x)
-  )
 
-(defn is-piece?[x]
-  (or (black-piece? x) (white-piece? x)))
+
+
 
 (defn is-pawn?[x]
   (contains? #{"P" "p"} x)
   )
 
 (defn occupied-by-enemy? [board location color]
-  (comment
+  (when debug
     (println "occupied-by-enemy?")
     (println board)
     (println  location)
@@ -161,8 +159,6 @@
 (defn off-board? [[x y]]
   (or (< x  0) (> x  7) (< y 0) (> y 7)))
 
-(defn is-bishop?[board loc]
-  (#{"b" "B"} (get board loc)))
 
 (defn is-board?[x]
   (map? x))
@@ -174,7 +170,8 @@
         x (range 0 8)
         ]
     [x y]))
-(println locations-helper)
+
+;;(println locations-helper)
 
 
 ;; From wikipedia:
@@ -195,19 +192,22 @@
 (defn board->string[board]
   (assert is-board? board)
   (str
-  (reduce (fn[accum location]
-            (str accum
-                 (get board location " ")
+    (reduce (fn[accum location]
+              (str accum
+                   (get board location " ")
 
-                 (if (= 7 (first location))
-                   "\n")
-                 (if (and (= 7 (first location))
-                          (not= 0 (second location)))
-                       (str (second location) " ")))
-            ) "8 " locations-helper)
-      "  abcdefgh" 
+                   (if (= 7 (first location))
+                     "\n")
+                   (if (and (= 7 (first location))
+                            (not= 0 (second location)))
+                     (str (second location) " ")))
+              ) "8 " locations-helper)
+    "  abcdefgh" 
     ))
-(println (board->string starting-board))
+
+
+;;(println (board->string starting-board))
+
 ;;; to print board 0 7, 1 7,     7,7 cr
 ;;;                0 6 .........7 6 cr
 ;;;                ...
@@ -219,25 +219,8 @@
   (is (= 
         starting-board-string
         (board->string
-        (string->board starting-board-string)))))
+          (string->board starting-board-string)))))
 (defn on-board?[loc] (not (off-board? loc)))
-
-(defn bishop-non-captures[board location]
-  (assert (is-bishop? board location))
-  (assert (is-board? board))
-  (assert (valid-location? location))
-  (let [[x y] location]
-    (into []  ;
-          (map (fn[loc2] [location loc2])
-               (apply concat 
-                      (for [op1  [+ -] op2 [+ -]]  ;; to generate 4 diagonals
-                        (take-while (fn[loc]
-                                      (and
-                                        (on-board? loc)
-                                        (not (occupied? board loc)))) 
-                                    (for [z (drop 1(range))]  [(op1 x z) (op2 y z)])
-                                    )
-                        ))))))
 
 (defn rook-right[x y z] [ (+ x z) y ])
 
@@ -255,9 +238,30 @@
 
 (defn bishop-sw[x y z] [ (- x z) (- y z)])
 
-(def bishop-rules [bishop-ne bishop-nw bishop-se bishop-sw])
-(def rook-rules [rook-right rook-left rook-up rook-down])
+(def rook-rules
+       [rook-right rook-left rook-up rook-down])
 
+(def bishop-rules
+[bishop-ne bishop-nw bishop-se bishop-sw])
+
+
+(def pieces-info
+  {
+   :r {:rules rook-rules
+       :ranging true}
+   :n {
+       }
+   :b {:rules 
+       bishop-rules
+       :ranging true}
+   :q {:rules
+       (concat bishop-rules rook-rules)
+       :ranging true }
+   :k {
+       }
+   :p {
+       }
+   })
 
 (def is-ranging? #{"q" "Q" "b" "B" "r" "R"})
 
@@ -276,8 +280,8 @@
         ]
     (when debug
       (println x y)
-     (println (board->string board))
-    (println location))
+      (println (board->string board))
+      (println location))
     (loop [locs-to-test (for [z (drop 1(range))]  ;; lazy seq of locations to test
                           (direction-fn x y z))
            ]
@@ -297,35 +301,29 @@
 
 (defn ranging-captures[board location rules]
   {:pre  []
-   :post [(set? %)]
    }
   "return set of locations for captures that the rook or bishop at location can make"
+  (when true (println "entering ranging-captures"))
   (assert (is-ranging? (get board location)))
   (assert (is-board? board))
   (assert (valid-location? location))
   (let [color (get-color (get board location))
         [x y] location
         ]
-    (set
-     (map (fn[loc-to-capture] (vector location loc-to-capture))
-          (remove nil?
-                 (map
-                   (partial ranging-capture-in-direction board location)
-                   rules 
-                   ))))))
+    (map (fn[loc2] (vector location loc2))
+         (remove nil?
+      (map (fn[loc-to-capture] (vector location loc-to-capture))
+           (remove nil?
+                   (map
+                     (partial ranging-capture-in-direction board location)
+                     rules 
+                     )))))))
 
-(defn bishop-captures[board location]
-  (ranging-captures board location bishop-rules)
-)
-
-;; (test-rook-moves)
-
-;; (test-rook-captures)
 
 ;; z will range from 1 to infinity
 
 
-(defn look-for-non-capture-in-direction[board location direction-fn]
+(defn ranging-non-capture-in-direction[board location direction-fn]
   ;; location is the location of the friendly piece in question 
   ;; direction-fn generate locations to test using a function applied to the range 1..infinity
   ;; Finished when 
@@ -340,8 +338,8 @@
         ]
     (when debug
       (println x y)
-     (println (board->string board))
-    (println location))
+      (println (board->string board))
+      (println location))
     (loop [locs-to-test (for [z (drop 1(range))]  ;; lazy seq of locations to test
                           (direction-fn x y z))
            accum []
@@ -353,9 +351,9 @@
           (off-board? loc-to-test)
           accum
           (occupied? board loc-to-test)
-           accum
+          accum
           true  ;; location is empty
-          (recur  (next locs-to-test) (conj accum loc-to-test) )))
+          (recur  (next locs-to-test) (conj accum (vector location loc-to-test)) )))
       )))
 
 ;; (f a b) -> a
@@ -366,94 +364,37 @@
 
 (defn ranging-non-captures[board location rules]
   {:pre  [(vector? rules)]
-   :post [(set? %)]
    }
-  "return set of locations for moves that the piece can make according to the rules which is an array of functions"
+  "return moves that the piece can make according to the rules which is an array of functions"
+  "[loc loc2]"
   (assert (is-ranging? (get board location)))
   (assert (is-board? board))
   (assert (valid-location? location))
   (let [color (get-color (get board location))
         [x y] location
         ]
-    (set (remove nil?
-                 (map
-                   (partial ranging-capture-in-direction board location)
+         (remove empty?
+                 (mapcat
+                   (partial ranging-non-capture-in-direction board location)
                    rules 
-                   )))))
+                   ))))
+
+(defn piece-info-at-location[board location]
+  (get pieces-info 
+       (keyword (clojure.string/lower-case (get board location)))
+       ))
 
 
-(defn rook-captures[board location]
-  {:pre  []
-   :post [(set? %)]
-   }
-  (ranging-captures board location rook-rules))
-
-(defn rook-non-captures[board location]
-  {:pre  []
-   :post [(set? %)]
-   }
-  (ranging-non-captures board location rook-rules))
-
-
-; (test-bishop-captures)
-(defn test-bishop-captures[]
-  (let [board (string->board (join "\n" 
-
-                                   ["       "
-                                    "     p"
-                                    "  p   "
-                                    "   B   b"
-                                    "  pnQ  "
-                                    "          "]))
-        ]
-    (when debug
-      (println (board->string board))
-      )
-    (is (= 
-          #{[2 1] [5 4] [2 3]}
-          (bishop-captures board [3 2])))
-    ))
-;;(def debug false)
-(defn test-rook-non-captures[]
-  (let [board (string->board (join "\n" 
-                                   ["   p    "
-                                    "  pR   b"
-                                    "  pQ    "
-                                    "        "]))
-        ]
-    (when debug
-     (println (board->string board))
-      )
-    (is (= 
-          #{[2 2] [3 3] [7 2]}
-          (rook-non-captures board [3 2])))
-    ))
-(test-rook-non-captures)
-(defn test-rook-captures[]
-  (let [board (string->board (join "\n" 
-                                   ["   p  "
-                                    "  pR   b"
-                                    "  pnQ  "
-                                    " "]))
-        ]
-    ;;    (println board)
-    ;;  (println (board->string board))
-    (is (= 
-          #{[2 2] [3 3] [7 2] [3 1]}
-          (rook-captures board [3 2])))
-    ))
-
-(defn rook-moves[board location]
-  (apply concat 
-         ((juxt rook-non-captures rook-captures)
-          board location))
-  )
-(defn bishop-moves[board location]
-  (apply concat 
-         ((juxt bishop-non-captures bishop-captures)
-          board location))
-  )
-
+(defn ranging-moves[board location]
+  (when true (println "ranging-moves")
+    (println "location is" location)
+    (println board) 
+    )
+  (let [piece-info (piece-info-at-location board location)]
+    (when true (println "piece-info is" piece-info))
+        (apply concat 
+           ((juxt ranging-captures ranging-non-captures)
+     board location (:rules piece-info)))))
 
 
 (defn pawn-captures[board [x y :as location]]
@@ -517,18 +458,35 @@
     (black-piece? piece)
     ))
 
+(def debug false)
+;;(println (checkmated? starting-board :white))
 (defn moves[board white-or-black]
-  (remove nil? (mapcat (fn[[loc piece :as z]]
-                         (case piece
-                           ("p" "P")
+  (when debug
+    (println "entering moves")
+    (println "board is" board)
+    (println "white-or-black" white-or-black)
+    )
+  (mapcat 
+                 (fn[[loc piece :as z]]
+                   (let [
+                         debug true
+                         piece-info (get pieces-info 
+                                         (keyword (clojure.string/lower-case piece)))]
+                     (when debug
+                       (println "piece-info is" piece-info)
+                       (println "piece is" piece))
+                     (assert piece-info)
+                     (cond (:ranging piece-info)
+                           (ranging-moves board loc) 
+                           (is-pawn? piece)
                            (pawn-moves board loc) 
-                           ("b" "B")
-                           (bishop-moves board loc)
-                           nil 
-                           )) (filter (fn[[_ piece]]
-                                        (is-color?  piece white-or-black)) board)
-                       ))) 
-
+                           true
+                          nil 
+                           ))) (filter (fn[[_ piece]]
+                                         (is-color?  piece white-or-black)) board)
+          ))
+;;(use 'clojure.stacktrace)
+;; (print-stack-trace *e)
 
 (defn -main
   "I don't do a whole lot ... yet."
@@ -541,7 +499,10 @@
     :black
     :white))
 
+
+;;  (checkmated? starting-board :white)
 (defn checkmated?[board color]
+  (when debug (println "in checkmated?, board is" board))
   "Return true if color has checkmated the opponent"
   (assert is-color? color)
   (assert is-board? board)
@@ -553,32 +514,23 @@
         ]
     (when debug
       (println "in checkmated?")
-        (println (moves board color)))
+      (println (moves board color)))
     (some #(when (= (second %) king-location) true) (moves board color))
 
     ))
 
 ;;;;;;;;;;;;;; TESTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn test-rook-captures2[]
-  (is (= 
-       #{[[1 0] [0 0]]} 
-        (rook-captures (string->board (str "BR\n"
-                                           "kR")) [1 0])))
+(defn test-moves[]
+  (println "test-moves")
+  (moves (string->board "R") :white)
   )
-;; (test-rook-captures2)
-(defn test-rook-moves[]
-  (let [board (string->board (join "\n" 
-                                   ["  "
-                                    " R"
-                                    "  "]))
-        ]
-    (println (rook-non-captures board [1 1])))
-  )
+;; (println (test-moves))
 (defn test-checkmated[]
   ;; white checkmates black
   (assert (not (checkmated? (string->board "BR\nkR") :white)))
-  (assert (checkmated? (string->board "BR\n k") :white))
+  (assert (checkmated? (string->board (str "BR\n"
+                                           " k")) :white))
   )
 ;; (test-checkmated)
 (defn test-starting-moves[]
@@ -586,13 +538,9 @@
     (map #(move->algebraic-notation board %) 
          (moves starting-board :black))))
 (defn run-tests[]
-(test-rook-captures2)
-  (test-rook-moves)
   (test-pawn-moves)
   (test-checkmated)
-  (test-bishop-captures)
-  (test-rook-captures)
-(test-board->string)
+  (test-board->string)
   (test-starting-moves)
   )
 ;;(run-tests)
