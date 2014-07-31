@@ -11,6 +11,7 @@
   ;; to use in repl:
   ;; cpr runs current file in vim
   ;; cp% runs current form. vim-fireplace
+  ;; cpp runs form under cursor
   (set! *warn-on-reflection* true)
   (use 'chess_clojure.core :reload) (ns chess_clojure.core)
   (use 'clojure.stacktrace)
@@ -46,6 +47,9 @@
 
 (def debug false)
 
+(defn my-is-a?[my-type obj]
+  (and (map? obj)
+  (= my-type (:type obj))))
 
 (defn piece-at-location[position location]
   (get (:piece-locations position) location))
@@ -56,31 +60,6 @@
 (defn is-color?[x]
   (get #{:white :black} x))
 
-;; (string->position "r" :white)
-(defn string->position[string color]
-  {:post  [(is-position? %)]
-   :pre [(string? string)
-         (is-color? color)]
-   }
-  (let [lines (vec (reverse (clojure.string/split-lines string)))
-        ]
-    { :type :position
-     :player-to-move color
-     :piece-locations
-     (into (sorted-map) 
-           (remove 
-             (fn [x]
-               (or (nil? (second x))
-                   (= "" (second x))
-                   (= " " (second x ))))
-             (for [x (range 8) y (range 8)
-                   :let [ location [x y]
-                         piece (str (get (get lines y) x)) 
-                         ]
-                   ]
-               [location piece]  ;; map entry
-               )))
-     }))
 
 (def starting-position-string
   (join "\n" ["rnbqkbnr"
@@ -92,11 +71,6 @@
               "PPPPPPPP"
               "RNBQKBNR\n"] ))
 
-(def starting-position
-  "Horizontal rows are ranks. Vertical rows are files"
-  (string->position starting-position-string :white))
-
-;; (println starting-position)
 ;;
 (defn valid-location?
   [[x y]]
@@ -113,6 +87,9 @@
 (defn occupied?[position location]
   (contains? (:piece-locations position) location) 
   )
+
+(defn unoccupied?[position location]
+   (not (occupied? position location)))
 
 (defn num->alpha[x]
   (assert number? x)
@@ -148,10 +125,21 @@
 (comment
   "Each location of the chessboard is identified by a unique coordinate pair—a letter and a number. The vertical column of squares (called files) from White's left (the queenside) to his right (the kingside) are labeled a through h. The horizontal rows of squares (called ranks) are numbered 1 to 8 starting from White's side of the board. Thus each square has a unique identification of file letter followed by rank number. (For example, White's king starts the game on square e1; Black's knight on b8 can move to open squares a6 or c6.)")
 
+(defn is-knight?[x]
+  (contains? #{"n" "N"} x)
+  )
+(defn is-king?[x]
+  (contains? #{"k" "K"} x)
+  )
 
 (defn is-pawn?[x]
   (contains? #{"P" "p"} x)
   )
+
+(def piece-color 
+  {"r" :black "n" :black "b" :black "q" :black "k" :black
+                  "R" :white "N" :white "B" :white "Q" :white "K" :white
+                  "P" :white})
 
 (defn friendly-square? [position location]
   (and (occupied? position location)
@@ -247,11 +235,6 @@
 ;;;                0 1  1 1   2 1      7 1 
 ;;;                0 0  0 1           7 0  cr
 
-(defn test-position->string[]
-  (is (= 
-        starting-position-string
-        (position->string
-          (string->position starting-position-string :white)))))
 (defn on-board?[loc] (not (off-board? loc)))
 
 (defn rook-right[x y z] [ (+ x z) y ])
@@ -339,16 +322,12 @@
 
 (defn non-ranging-moves[position location rules]
   "returns moves, including captures. For king and knight"
-  (let [ [x y] location
-        ]
-    (when debug
-      (println "x y" x y)
-      (println "rules" rules))
     (map (fn[loc2] [location loc2])
          (remove (fn[loc2] (friendly-square? position loc2))
                  (filter on-board? 
-                         (map (fn[rule] (apply rule [x y])) rules))
-                 ))))
+                         (map (fn[rule] (apply rule location))
+                              rules))
+                 )))
 
 
 (def is-ranging? #{"q" "Q" "b" "B" "r" "R"})
@@ -409,6 +388,19 @@
             rules 
             )))
 
+;; (pawn-capturing-locations starting-position [0 1])
+(defn pawn-capturing-locations[position [x y :as location]]
+  (let [
+        op (if (= :white (:player-to-move position)) inc dec) 
+        ]
+  "return valid capture locations for the pawn at given location"
+    (keep 
+      (fn[dec-or-inc]
+        (if (unoccupied? position [(dec-or-inc x) (op y)])
+          [(dec-or-inc x) (op y)]
+
+          )) [inc dec]) 
+    ))
 
 (defn pawn-captures[position [x y :as location]]
   "return valid capture moves for the pawn at the location on the position"
@@ -455,21 +447,115 @@
           position location)
          ))
 
-(defn test-pawn-moves[]
-  (let [ position starting-position]
-    (pprint (map (partial move->algebraic-notation starting-position)
-                 (pawn-moves starting-position [0 1])))
+
+
+
+;; (count (moves (string->position "  n\n   \n   " :black) ))
+;; (:piece-locations (string->position "  n\n   \n   " ))
+
+(def opposite-color {:black :white :white :black})
+(defn flip-position[position]
+   (update-in position [:player-to-move] opposite-color)
+  )
+
+(defn locations-under-attack-moves[position]
+  {
+   ;;:post  [(set? %)]
+   :pre [(my-is-a? :position position)] }
+  (mapcat 
+    (fn[[loc piece :as z]]
+      (let [
+            piece-info (get pieces-info 
+                            (keyword (clojure.string/lower-case piece)))]
+        (cond (:ranging piece-info)
+              (ranging-moves position loc (:rules piece-info)) 
+              (is-pawn? piece)
+              (pawn-capturing-locations position loc) 
+              (is-knight? piece)
+              (non-ranging-moves position loc (:rules piece-info)) 
+              (is-king? piece)
+              (non-ranging-moves position loc (:rules piece-info))
+              true
+              (assert false)
+              ))) 
+    (filter (fn[[_ piece]]
+              (=   (piece-color piece)
+                 (:player-to-move position))) 
+            (:piece-locations position))
     ))
 
+;; (locations-under-attack starting-position)
+   ;;      (locations-under-attack (string->position "Bk" :black))
+;;
+(defn locations-under-attack[position]
+  {
+   :post  [(set? %)]
+   :pre [(my-is-a? :position position)] }
 
-(def piece-color {"r" :black "n" :black "b" :black "q" :black "k" :black
-                  "R" :white "N" :white "B" :white "Q" :white "K" :white
-                  "P" :white})
+  (let [enemy-position (flip-position position)]
+    (set (filter (partial unoccupied? enemy-position)
+            (map second (locations-under-attack-moves enemy-position))))
+  ))
 
-;; (count (moves (string->position "  n\n   \n   " :black) :black))
-;; (:piece-locations (string->position "  n\n   \n   " :black))
-(defn moves[position white-or-black]
-  (when true ;;debug
+
+
+;; (println starting-position)
+
+;; (king-location starting-position)
+(defn king-location[position]
+  "TODO: don't use scan???"
+  (let [piece (if (= :white (:player-to-move position)) 
+                "K"
+                "k")]
+    (some #(if (= piece (second %))
+                (first %))
+          (:piece-locations position))
+    ))
+;; (update-position starting-position)
+(defn update-position[position]
+  (let [under-attack 
+           (locations-under-attack position)
+        ]
+   (assoc position 
+          :locations-under-attack
+           under-attack
+          :in-check
+          (contains? under-attack (king-location position))
+
+  )))
+
+;; (string->position "r" :white)
+(defn string->position[string color]
+  {:post  [(is-position? %)]
+   :pre [(string? string)
+         (is-color? color)] }
+  (let [lines (vec (reverse (clojure.string/split-lines string)))
+        ]
+    (update-position
+    { :type :position
+     :player-to-move color
+     :piece-locations
+     (into (sorted-map) 
+           (remove 
+             (fn [x]
+               (or (nil? (second x))
+                   (= "" (second x))
+                   (= " " (second x ))))
+             (for [x (range 8) y (range 8)
+                   :let [ location [x y]
+                         piece (str (get (get lines y) x)) 
+                         ]
+                   ]
+               [location piece]  ;; map entry
+               )))
+     })))
+
+(def starting-position
+  "Horizontal rows are ranks. Vertical rows are files"
+  (string->position starting-position-string :white))
+
+(defn moves[position]
+  (when debug
     (println "entering moves")
     (println "position is" position)
     )
@@ -486,8 +572,14 @@
               (ranging-moves position loc (:rules piece-info)) 
               (is-pawn? piece)
               (pawn-moves position loc) 
-              true
+             (is-knight? piece) 
               (non-ranging-moves position loc (:rules piece-info)) 
+             (is-king? piece) 
+              (remove (fn[move] (contains? (:locations-under-attack position)
+                                           (second move)))
+              (non-ranging-moves position loc (:rules piece-info))) 
+              true
+              (assert false)
               ))) 
     (filter (fn[[_ piece]]
               (=   (piece-color piece)
@@ -506,13 +598,22 @@
 
 ;;;;;;;;;;;;;; TESTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn string->position-and-print[x y]
+   (let [position (string->position x y)]
+     (println (position->string position))
+     position))
+;; (test-king-cannot-move-to-a-location-under-attack)
+;; (locations-under-attack (string->position-and-print "bbn\n\nK" :white))
+(defn test-king-cannot-move-to-a-location-under-attack[]
+      (is (= []
+         (moves (string->position-and-print "bbn\n\nK" :white)))))
 
 (defn test-king-moves[]
   (is (= '([[0 0] [1 1]] [[0 0] [1 0]] [[0 0] [0 1]])
-         (moves (string->position "k" :black) :black))
+         (moves (string->position "k" :black)))
       )
   (is (= '([[0 0] [1 1]] [[0 0] [0 1]])
-         (moves (string->position "kN" :black) :black)))
+         (moves (string->position "kN" :black))))
   )
 (defn test-non-ranging-moves[]
   (is (= 
@@ -533,20 +634,32 @@
 
 (defn test-knight-moves[]
   (is (= 8 
-         (count (moves (string->position "  n\n   \n   " :black) :black))
+         (count (moves (string->position "  n\n   \n   " :black)))
 
          )))
 (test-knight-moves)
 (defn test-moves[]
   (println "test-moves")
-  (moves (string->position "R" :white) :white)
+  (moves (string->position "R" :white) )
   )
-
+;; (test-moves)
+(defn test-position->string[]
+  (is (= 
+        starting-position-string
+        (position->string
+          (string->position starting-position-string :white)))))
+(defn test-pawn-moves[]
+  (let [ position starting-position]
+    (pprint (map (partial move->algebraic-notation starting-position)
+                 (pawn-moves starting-position [0 1])))
+    ))
 (defn test-starting-moves[]
   (let [position starting-position]
     (map #(move->algebraic-notation position %) 
-         (moves starting-position :black))))
+         (moves starting-position))))
 (defn run-tests[]
+  (test-king-moves)
+  (test-king-cannot-move-to-a-location-under-attack)
   (test-pawn-moves)
   (test-position->string)
   (test-starting-moves)
@@ -555,4 +668,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(test-king-moves)
 (test-starting-moves)
+  (test-king-cannot-move-to-a-location-under-attack)
 
