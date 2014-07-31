@@ -1,0 +1,71 @@
+(def bishop-rules
+(def debug false)
+(def is-ranging? #{"q" "Q" "b" "B" "r" "R"})
+(def king-rules  [king-ne king-nw king-se king-sw king-left king-right
+(def knight-rules 
+(def locations-helper
+(defn bishop-ne[x y z] [ (+ x z) (+ y z) ])
+(defn bishop-nw[x y z] [ (- x z) (+ y z) ])
+(defn bishop-se[x y z] [ (+ x z) (- y z)])
+(defn bishop-sw[x y z] [ (- x z) (- y z)])
+(defn black-piece?[x]
+(defn board->fen[board]
+(defn board->string[board]
+(defn checkmated?[board color]
+(defn controlled-by[board color]
+(defn dec2[x] (- x 2))
+(defn get-color[piece]
+(defn inc2[x] (+ x 2))
+(defn is-board?[x]
+(defn is-color?[piece white-or-black]
+(defn is-pawn?[x]
+(defn king-down[x y] [x (dec y)])
+(defn king-left[x y] [(dec x) y])
+(defn king-ne[x y] [(+ x 1) (+ y 1)])
+(defn king-nw[x y] [(- x 1) (+ y 1)])
+(defn king-right[x y] [(inc x) y])
+(defn king-se[x y] [(+ x 1) (- y 1)])
+(defn king-sw[x y] [(- x 1) (+ y 1)])
+(defn king-up[x y] [x (inc y)])
+(defn -main
+(defn move->algebraic-notation[board [[x1 y1] [x2 y2]]]
+(defn moves[board white-or-black]
+(defn non-ranging-moves[board location rules]
+(defn num->alpha[x]
+(defn occupied?[board location]
+(defn occupied-by-enemy? [board location color]
+(defn off-board? [[x y]]
+(defn on-board?[loc] (not (off-board? loc)))
+(defn opponents-color[color]
+(defn pawn-captures[board [x y :as location]]
+(defn pawn-moves[board [x y :as location] ]
+(defn pawn-non-capturing-moves[board [x y :as location] ]
+(defn piece->color[piece]
+(defn piece-info-at-location[board location]
+(defn ranging-capture-in-direction[board location direction-fn]
+(defn ranging-captures[board location rules]
+(defn ranging-moves[board location rules]
+(defn ranging-non-capture-in-direction[board location direction-fn]
+(defn ranging-non-captures[board location rules]
+(defn rook-down[x y z] [ x (- y z)])
+(defn rook-left[x y z] [ (- x z) y ])
+(defn rook-right[x y z] [ (+ x z) y ])
+(defn rook-up[x y z] [ x (+ y z)])
+(defn run-tests[]
+(defn string->board[string]
+(defn test-board->string[]
+(defn test-checkmated[]
+(defn test-controlled-by[]
+(defn test-king-moves[]
+(defn test-knight-moves[]
+(defn test-moves[]
+(defn test-non-ranging-moves[]
+(defn test-pawn-moves[]
+(defn test-starting-moves[]
+(defn valid-location?
+(defn white-piece?[x]
+(def pieces-info
+(def rook-rules
+(def starting-board
+(def starting-board-string
+(def zzzknight-rules 
