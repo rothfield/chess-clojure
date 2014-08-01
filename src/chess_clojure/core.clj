@@ -7,6 +7,7 @@
   )
 ;;; TODO: create position protocol ??
 ;;;
+;;; Key abstractions: position piece move location
 (comment
   ;; to use in repl:
   ;; cpr runs current file in vim
@@ -25,9 +26,9 @@
 ;;
 ;; data types:
 ;; -----------
-;; pieces are strings (letters) rnbqkpRNBQKP  "r" "n" etc
+;; pieces are strings (letters) rnbqkpRNBQKP  :r :n etc
 ;; location is a pair of numbers. [0 0] to [7 7]
-;; board is a map of locations to pieces {[0 0] "R" [1 0] "N" }
+;; board is a map of locations to pieces {[0 0] :r [1 0] :N }
 ;; [0 0] is white's queen rook
 ;; moves are pairs of locations  [[0 0] [0 1]] 
 ;;   meaning move the piece at [0 0] to [0 1]
@@ -77,11 +78,11 @@
   (and (< x 8) (> x -1) (< y 8) (> y -1)))
 
 (defn black-piece?[x]
-  (contains? #{"r" "n""b" "q" "k" "p"} x)
+  (contains? #{:r :n:b :q :k :p} x)
   )
 
 (defn white-piece?[x]
-  (contains? #{"R" "N""B" "Q" "K" "P"} x)
+  (contains? #{:r :N:B :Q :K :P} x)
   )
 
 (defn occupied?[position location]
@@ -100,7 +101,7 @@
 
 (defn move->algebraic-notation[position [[x1 y1] [x2 y2]]]
   ;; assert if occupied, must be enemy 
-  (str (piece-at-location position [x1 y1])
+  (str (name (piece-at-location position [x1 y1]))
        (num->alpha x1)
        (inc y1)
        (if (occupied? position [x2 y2])
@@ -115,10 +116,10 @@
 
 
 ;; 
-;; [0 0] "R"
-;; [1 0] "N"
+;; [0 0] :r
+;; [1 0] :N
 ;; ....
-;; [0 7] "r"
+;; [0 7] :r
 ;;
 
 
@@ -126,20 +127,20 @@
   "Each location of the chessboard is identified by a unique coordinate pair—a letter and a number. The vertical column of squares (called files) from White's left (the queenside) to his right (the kingside) are labeled a through h. The horizontal rows of squares (called ranks) are numbered 1 to 8 starting from White's side of the board. Thus each square has a unique identification of file letter followed by rank number. (For example, White's king starts the game on square e1; Black's knight on b8 can move to open squares a6 or c6.)")
 
 (defn is-knight?[x]
-  (contains? #{"n" "N"} x)
+  (contains? #{:n :N} x)
   )
 (defn is-king?[x]
-  (contains? #{"k" "K"} x)
+  (contains? #{:k :K} x)
   )
 
 (defn is-pawn?[x]
-  (contains? #{"P" "p"} x)
+  (contains? #{:P :p} x)
   )
 
 (def piece-color 
-  {"r" :black "n" :black "b" :black "q" :black "k" :black
-   "R" :white "N" :white "B" :white "Q" :white "K" :white
-   "P" :white})
+  {:r :black :n :black :b :black :q :black :k :black
+   :R :white :N :white :B :white :Q :white :K :white
+   :P :white})
 
 (defn friendly-square? [position location]
   (and (occupied? position location)
@@ -196,9 +197,9 @@
 ;;  defn move
 ;; From wikipedia:
 ;; A FEN record contains six fields. The separator between fields is a space. The fields are:
-;; Piece placement (from white's perspective). Each rank is described, starting with rank 8 and ending with rank 1; within each rank, the contents of each square are described from file "a" through file "h". Following the Standard Algebraic Notation (SAN), each piece is identified by a single letter taken from the standard English names (pawn = "P", knight = "N", bishop = "B", rook = "R", queen = "Q" and king = "K").[1] White pieces are designated using upper-case letters ("PNBRQK") while black pieces use lowercase ("pnbrqk"). Empty squares are noted using digits 1 through 8 (the number of empty squares), and "/" separates ranks.
-;; Active color. "w" means White moves next, "b" means Black.
-;; Castling availability. If neither side can castle, this is "-". Otherwise, this has one or more letters: "K" (White can castle kingside), "Q" (White can castle queenside), "k" (Black can castle kingside), and/or "q" (Black can castle queenside).
+;; Piece placement (from white's perspective). Each rank is described, starting with rank 8 and ending with rank 1; within each rank, the contents of each square are described from file "a" through file "h". Following the Standard Algebraic Notation (SAN), each piece is identified by a single letter taken from the standard English names (pawn = :P, knight = :N, bishop = :B, rook = :r, queen = :Q and king = :K).[1] White pieces are designated using upper-case letters ("PNBRQK") while black pieces use lowercase ("pnbrqk"). Empty squares are noted using digits 1 through 8 (the number of empty squares), and "/" separates ranks.
+;; Active color. "w" means White moves next, :b means Black.
+;; Castling availability. If neither side can castle, this is "-". Otherwise, this has one or more letters: :K (White can castle kingside), :Q (White can castle queenside), :k (Black can castle kingside), and/or :q (Black can castle queenside).
 ;; En passant target square in algebraic notation. If there's no en passant target square, this is "-". If a pawn has just made a two-square move, this is the position "behind" the pawn. This is recorded regardless of whether there is a pawn in position to make an en passant capture.[2]
 ;; Halfmove clock: This is the number of halfmoves since the last capture or pawn advance. This is used to determine if a draw can be claimed under the fifty-move rule.
 ;; Fullmove number: The number of the full move. It starts at 1, and is incremented after Black's move.
@@ -300,25 +301,26 @@
   [bishop-ne bishop-nw bishop-se bishop-sw])
 
 
-(def pieces-info
-  {
-   :r {:rules rook-rules
+(defn pieces-info[x]
+ (case x
+  (:r :R)  
+   {:rules rook-rules
        :ranging true}
-   :n {
+   (:n :N) {
        :rules knight-rules
        }
-   :b {:rules 
+   (:b :B) {:rules 
        bishop-rules
        :ranging true}
-   :q {:rules
+   (:q :Q) {:rules
        (concat bishop-rules rook-rules)
        :ranging true }
-   :k {
+   (:k :K) {
        :rules king-rules
        }
-   :p {
+   (:p :P) {
        }
-   })
+  )) 
 
 (defn non-ranging-moves[position location rules]
   "returns moves, including captures. For king and knight"
@@ -330,7 +332,7 @@
                )))
 
 
-(def is-ranging? #{"q" "Q" "b" "B" "r" "R"})
+(def is-ranging? #{:q :Q :b :B :R :r})
 
 (defn ranging-moves-in-direction[position location direction-fn]
   ;; location is the location of the friendly piece in question 
@@ -375,9 +377,7 @@
 
 (defn piece-info-at-location[position location]
   (get pieces-info 
-       (keyword (clojure.string/lower-case (piece-at-location position location)))
-       ))
-
+       (piece-at-location position location)))
 
 (defn ranging-moves[position location rules]
   (assert (is-ranging? (piece-at-location position location)))
@@ -459,9 +459,9 @@
 
 (defn flip-position[position]
   (assoc position :flipped true
-                     :locations-under-attack []
-                              :player-to-move (opposite-color (:player-to-move position))))
- ;; (flip-position starting-position) 
+         :locations-under-attack []
+         :player-to-move (opposite-color (:player-to-move position))))
+;; (flip-position starting-position) 
 ;; (println starting-position)
 
 (defn locations-under-attack-moves[position]
@@ -490,19 +490,6 @@
             (:piece-locations position))
     ))
 
-;; (locations-under-attack starting-position)
-;;      (locations-under-attack (string->position "Bk" :black))
-;;
-(defn locations-under-attack[position]
-  {
-   :post  [(set? %)]
-   :pre [(my-is-a? :position position)] }
-
-  (let [enemy-position (flip-position position)]
-   (when debug (println "enemy-position" enemy-position))
-    (set (map second (moves enemy-position)))))
-        ;; (filter (partial unoccupied? enemy-position)
-                ;; (map second (locations-under-attack-moves enemy-position))))
 
 
 
@@ -512,93 +499,61 @@
 (defn king-location[position]
   "TODO: don't use scan???"
   (let [piece (if (= :white (:player-to-move position)) 
-                "K"
-                "k")]
+                :K
+                :k)]
     (some #(if (= piece (second %))
              (first %))
           (:piece-locations position))
     ))
-;; (:king-moves (string->position-and-print "K" :white)
-;;         (king-moves (string->position-and-print "K" :white))
+;; (:king-moves (string->position-and-print :K :white)
+;;         (king-moves (string->position-and-print :K :white))
 ;;
 (defn king-moves[position]
   (when debug
-  (println "king-moves")
-  (println position))
+    (println "king-moves")
+    (println position))
 
   (remove (fn[move]
-           (when debug (println "move in fn is" move)
-            (println "second move" (second move))
-            (println (:locations-under-attack position)))
+            (when debug (println "move in fn is" move)
+              (println "second move" (second move))
+              (println (:locations-under-attack position)))
             (contains? (:locations-under-attack position)
-                               (second move)))
+                       (second move)))
           (non-ranging-moves position (king-location position)
                              king-rules) 
           ))
 
-(defn update-checkmated[position]
-  (assoc position :checkmated
-           (and (:in-check position)
-                (= 0 (count (:king-moves position))))))
-
-(defn update-in-check[position]
-  (assoc position :in-check
-           (contains? (:locations-under-attack position)
-                      (king-location position))
-  ))
-  
-
-(defn update-under-attack[position]
-    (assoc position :locations-under-attack
-           (locations-under-attack position)))
-
-(defn update-king-moves[position]
-        (assoc position :king-moves (king-moves position)))
-(defn update-moves[position]
-   (assoc position :moves (moves position))
-  )
-(defn update-algebraic-moves[position]
-   (assoc position :algebraic-moves 
-       (map (partial move->algebraic-notation position)
-          (:moves position))))
-(pprint starting-position)
-(defn update-position[position]
-  (-> position update-under-attack
-      update-king-moves
-      update-in-check
-      update-checkmated
-      update-moves
-      update-algebraic-moves))
-
-;; (string->position "rK" :white)
-(defn string->position[string color]
+;; (string->position-base "rK" :white)
+;{;
+(def piece-letter #{"r" "R" "N" "n" "B" "b" "Q" "q" "K" "k" "P" "p"})
+;; (get piece-letter "r")
+;;
+(defn string->position-base[string color]
   {:post  [(is-position? %)]
    :pre [(string? string)
          (is-color? color)] }
   (let [lines (vec (reverse (clojure.string/split-lines string)))
         ]
-    (update-position
       { :type :position
        :player-to-move color
        :piece-locations
        (into (sorted-map) 
-             (remove 
-               (fn [x]
-                 (or (nil? (second x))
-                     (= "" (second x))
-                     (= " " (second x ))))
+            (filter (fn[zzz] (not (nil? (second zzz))))
                (for [x (range 8) y (range 8)
                      :let [ location [x y]
-                           piece (str (get (get lines y) x)) 
+                           my-piece-str (str (get (get lines y) x)) 
+                         ;;  _ (println "my-piece-str is" my-piece-str)
+                           piece 
+                             (if (get piece-letter my-piece-str)
+                               (keyword my-piece-str))
+                           
                            ]
                      ]
                  [location piece]  ;; map entry
                  )))
-       })))
+       }))
 
-(def starting-position
-  "Horizontal rows are ranks. Vertical rows are files"
-  (string->position starting-position-string :white))
+
 
 (defn moves[position]
   (when debug
@@ -606,10 +561,10 @@
     (println "position is" position)
     )
   (mapcat 
-    (fn[[loc piece :as z]]
+    (fn[[loc piece]]  ;; destructure map entry
+      (when debug (println "piece is" piece))
       (let [
-            piece-info (get pieces-info 
-                            (keyword (clojure.string/lower-case piece)))]
+            piece-info (pieces-info piece)]
         (when debug
           (println "piece-info is" piece-info)
           (println "piece is" piece))
@@ -632,13 +587,75 @@
     ))
 ;;(use 'clojure.stacktrace)
 ;; (print-stack-trace *e)
+;;
+;; (locations-under-attack starting-position)
+;;      (locations-under-attack (string->position "Bk" :black))
+;;
+(defn locations-under-attack[position]
+  {
+   :post  [(set? %)]
+   :pre [(my-is-a? :position position)] }
+
+  (let [enemy-position (flip-position position)]
+    (when debug (println "enemy-position" enemy-position))
+    (set (map second (moves enemy-position)))))
+
+(defn update-moves[position]
+  (assoc position :moves (moves position))
+  )
+
+(defn update-checkmated[position]
+  (assoc position :checkmated
+         (and (:in-check position)
+              (= 0 (count (:king-moves position))))))
+
+(defn update-in-check[position]
+  (assoc position :in-check
+         (contains? (:locations-under-attack position)
+                    (king-location position))
+         ))
+
+
+(defn update-under-attack[position]
+  (assoc position :locations-under-attack
+         (locations-under-attack position)))
+
+(defn update-king-moves[position]
+  (assoc position :king-moves (king-moves position)))
+
+
+(defn update-algebraic-moves[position]
+  (assoc position :algebraic-moves 
+         (map (partial move->algebraic-notation position)
+              (:moves position))))
+
+(defn update-position[position]
+  (-> position 
+      update-under-attack
+      update-king-moves
+      update-in-check
+      update-checkmated
+      update-moves
+      update-algebraic-moves))
+
+(defn string->position[string color]
+  {:post  [(is-position? %)]
+   :pre [(string? string)
+         (is-color? color)] }
+    (update-position (string->position-base string color)))
+
+;; (filter (partial unoccupied? enemy-position)
+;; (map second (locations-under-attack-moves enemy-position))))
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
   (println "Hello, World!"))
 
-
+;; (println starting-position)
+(def starting-position
+  "Horizontal rows are ranks. Vertical rows are files"
+  (string->position starting-position-string :white))
 
 ;;;;;;;;;;;;;; TESTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -658,13 +675,13 @@
          (moves (string->position "k" :black)))
       )
   (is (= 
-         '([[0 0] [1 1]] [[0 0] [1 0]] [[0 0] [0 1]])
-         (moves (string->position "kN" :black))))
+        '([[0 0] [1 1]] [[0 0] [1 0]] [[0 0] [0 1]])
+        (moves (string->position "kN" :black))))
   )
 (defn test-non-ranging-moves[]
   (is (= 
         '([[0 0] [2 1]])
-        (non-ranging-moves (string->position "n" :black) [0 0] knight-rules)
+        (non-ranging-moves (string->position :n :black) [0 0] knight-rules)
         ))
   (is (= 
         '([[2 2] [4 3]] [[2 2] [0 3]] [[2 2] [4 1]] [[2 2] [0 3]])
@@ -686,8 +703,8 @@
 
 (defn test-moves[]
   (is (= 37
-  (count (moves (string->position "      P\nRNBQK" :white) )))
-  ))
+         (count (moves (string->position "      P\nRNBQK" :white) )))
+      ))
 
 (defn test-position->string[]
   (is (= 
@@ -697,21 +714,21 @@
 
 
 (defn test-pawn-moves[]
-(is (= '("Pa2a3")
-       (map (partial move->algebraic-notation starting-position)
-                 (pawn-moves starting-position [0 1])))))
+  (is (= '("Pa2a3")
+         (map (partial move->algebraic-notation starting-position)
+              (pawn-moves starting-position [0 1])))))
 
 (defn test-not-in-check[]
   (is (not (:in-check starting-position)))
   )
 (defn test-in-check[]
   (is (:in-check 
-  (string->position "rK" :white) )
-  ))
+        (string->position "rK" :white) )
+      ))
 (defn test-checkmated[]
   (is (:checkmated 
-  (string->position "PPPP\nK  r" :white) )
-  ))
+        (string->position "PPPP\nK  r" :white) )
+      ))
 ;; (moves (string->position "rK" :black) )
 ;;
 ;; (king-location (string->position "rK" :white))
