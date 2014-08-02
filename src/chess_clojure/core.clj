@@ -390,13 +390,13 @@
         ]
     "return valid capture locations for the pawn at given location"
     (remove off-board?
-    (keep 
-      (fn[dec-or-inc]
-        (if (unoccupied? position [(dec-or-inc x) (op y)])
-          [(dec-or-inc x) (op y)]
+            (keep 
+              (fn[dec-or-inc]
+                (if (unoccupied? position [(dec-or-inc x) (op y)])
+                  [(dec-or-inc x) (op y)]
 
-          )) [inc dec]) 
-    )))
+                  )) [inc dec]) 
+            )))
 
 (defn pawn-captures[position [x y :as location]]
   "return valid capture moves for the pawn at the location on the position"
@@ -493,7 +493,7 @@
   (let [lines (vec (reverse (clojure.string/split-lines string)))
         ]
     { :type :position
-    :castling-availability #{ :K :Q :k :q }
+     :castling-availability #{ :K :Q :k :q }
      :player-to-move color
      :piece-locations
      (into (sorted-map) 
@@ -581,51 +581,66 @@
       update-algebraic-moves))
 
 (defn location-at-eigth-rank?[position location]
-    (= (get { :white 7 :black 0} (:player-to-move position))
-       (second location)))
- (defn choose-promoted-piece[color]
-   (if (= color :white)
+  (= (get { :white 7 :black 0} (:player-to-move position))
+     (second location)))
+(defn choose-promoted-piece[color]
+  (if (= color :white)
     :Q
     :q))
-    ;; (rand-nth [:R :N :B :Q])
-    ;; (rand-nth [:r :n :b :q])))
+;; (rand-nth [:R :N :B :Q])
+;; (rand-nth [:r :n :b :q])))
 
 
 (defn update-castling-availability[position move]
-  
+
   (let [availability (:castling-availability position)]
+    (println availability)
     (assoc position :castling-availability
-  (cond 
-    (or 
-            (= (first move) [0 0])
-            (= (second move) [0 0]))
-       (disj availability [:castling-availability :Q])
-         (or 
-            (= (first move) [7 0])
-            (= (second move) [7 0]))
-       (disj availability [:castling-availability :K])
-    true
-    availability
-))))
+           (cond 
+             (or 
+               (= (first move) [0 0])
+               (= (second move) [0 0]))
+             (do
+               (disj availability :Q)
+               )
+             (or 
+               (= (first move) [7 0])
+               (= (second move) [7 0]))
+             (disj availability :K)
+             (or 
+               (= (first move) [0 7])
+               (= (second move) [0 7]))
+             (disj availability :q)
+             (or 
+               (= (first move) [7 7])
+               (= (second move) [7 7]))
+             (disj availability :k)
+               (= (first move) [4 0])
+             (disj availability :K :Q)
+               (= (first move) [4 7])
+             (disj availability :k :q)
+             true
+             availability
+             ))))
 (defn play-move[position move]
   (when debug
-   (println "move is " move)
-   (println "position is " position)
+    (println "move is " move)
+    (println "position is " position)
     )
   (let [locs (:piece-locations position)
 
         piece (piece-at-location position (first move)) 
         promoted-piece (if (and (is-pawn? piece)
-                               (location-at-eigth-rank? position
-                                                        (second move)))
-                           (choose-promoted-piece (:player-to-move position)) 
+                                (location-at-eigth-rank? position
+                                                         (second move)))
+                         (choose-promoted-piece (:player-to-move position)) 
                          piece)
         new-locs (-> locs (dissoc (first move))
                      (assoc (second move) promoted-piece))
         ]
     (assert piece)
     (assert (friendly-square? position (first move)))
-   ;; (update-position (flip-position (assoc position :piece-locations new-locs)))
+    ;; (update-position (flip-position (assoc position :piece-locations new-locs)))
     (-> position 
         (update-castling-availability move)
         (assoc :piece-locations new-locs)
@@ -698,14 +713,14 @@
 
 (defn test-king-attack-sphere[]
   (string->position-and-print (str
-                                    "   K  \n"
-                                    "       \n"
-                                    "    k\n"
+                                "   K  \n"
+                                "       \n"
+                                "    k\n"
                                 "\n \n \n \n "
-                                   )
-                                 :black))
+                                )
+                              :black))
 
-  
+
 (defn locations-under-attack[position]
   (when debug (println "Entering locations-under-attack, position is" 
                        position))
@@ -799,58 +814,63 @@
 ;; (string->position starting-position-string :black))
 
 (defn is-capture?[position move]
-    (if (piece-at-location position (second move))
-      true
-      false)
+  (if (piece-at-location position (second move))
+    true
+    false)
   )
 (defn choose-move[position]
-    (or (some #(if (is-capture? position %) %) (:moves position))
-        (rand-nth (:moves position))
-))
+  (or (some #(if (is-capture? position %) %) (:moves position))
+      (rand-nth (:moves position))
+      ))
 ;; (choose-move starting-position)
 ;; (choose-move (string->position-and-print "Rn k K" :white))
-;; (println starting-position)
+;; (println (join (map name (:castling-availability starting-position)) ))
+;;  (->>  starting-position :castling-availability (map name)  join println))
 (defn play-game[]
   (let [noisy false]
-  (println "\n\n\n")
-  (loop [position starting-position
-         move-ctr 0
-         game-ctr 0]
-   ;; (println (join (:castling-availability position) "\n"))
-    (-> (map name (:castling-availability position)) (join "\n") println)
-    (when noisy (println move-ctr))
-    (when noisy
+    (println "\n\n\n")
+    (loop [position starting-position
+           move-ctr 0
+           game-ctr 0]
+
+      (when noisy (println move-ctr))
+      (when true
       (println (position->string position))
-      )
-    (when (zero? (mod move-ctr 2000))
-   ;;   (println ".")
-      ;;   (println (position->string position))
- ;;     (Thread/sleep 1000)
-      )
-    (when debug
-      (Thread/sleep 10000)
-      (println move-ctr)
-      (println position)
-      )
-    (cond 
-      (> move-ctr 10000000)
-      (do (println "Reached limit of " (str move-ctr) " iterations")
-          (println (position->string position)))
-      (= :checkmate (:status position))
-      (do
-        (println "Game" game-ctr ":   Moves:"  move-ctr (name (:status position)) "!")
-        (println (position->string position))
-        (Thread/sleep 10000)
-        (recur  starting-position 0 (inc game-ctr))
+      (println 
+        (-> (map name (:castling-availability position)) (join "\n") println)
         )
-      (not (= :active (:status position)))
+      (Thread/sleep 1000)
+        )
+
+      (when (zero? (mod move-ctr 2000))
+        ;;   (println ".")
+        ;;   (println (position->string position))
+        ;;     (Thread/sleep 1000)
+        )
+      (when debug
+        (Thread/sleep 10000)
+        (println move-ctr)
+        (println position)
+        )
+      (cond 
+        (> move-ctr 10000000)
+        (do (println "Reached limit of " (str move-ctr) " iterations")
+            (println (position->string position)))
+        (= :checkmate (:status position))
+        (do
+          (println "Game" game-ctr ":   Moves:"  move-ctr (name (:status position)) "!")
+          (println (position->string position))
+          (Thread/sleep 10000)
+          (recur  starting-position 0 (inc game-ctr))
+          )
+        (not (= :active (:status position)))
         (recur  starting-position 0 (inc game-ctr))
-      true
-      (recur (play-move position
-                   (choose-move position)
-                        )
-             (inc move-ctr)
-             (inc game-ctr))))))
+        true
+        (recur (play-move position
+                          (choose-move position)
+                          )
+               (inc move-ctr)
+               (inc game-ctr))))))
 
 
 
