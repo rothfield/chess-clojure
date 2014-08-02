@@ -48,6 +48,7 @@
 
 (def debug false)
 (declare moves locations-under-attack string->position string->position-and-print)
+(declare white-to-move? black-to-move?)
 
 (defn my-is-a?[my-type obj]
   (and (map? obj)
@@ -61,17 +62,19 @@
 
 (defn is-color?[x]
   (get #{:white :black} x))
-
-
+;; (println starting-position)
+;; (castling-available-white-queenside? starting-position)
 (def starting-position-string
-  (join "\n" ["rnbqkbnr"
+;;  (join "\n" ["rnbqkbnr"
+  (join "\n" ["r   k  r "
               "pppppppp"
               "        "
               "        "
               "        "
               "        "
               "PPPPPPPP"
-              "RNBQKBNR\n"] ))
+              "R   K  R\n"] ))
+          ;;    "RNBQKBNR\n"] ))
 
 ;;
 (defn valid-location?
@@ -170,39 +173,6 @@
 
 
 
-
-;; position {:type :position
-;;          :piece-locations { [0 0] :r } 
-;;          :player-to-move :white or :black
-;;          OR
-;;           :turn :white or :black
-;;         :castling-availability #{ :K :Q :k :q }
-;;         :en-passant-target-square
-;;  }
-;;           
-;; rnbqkb1r/ppp1pppp/5n2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq -
-;; position: {:board { [0 0] -> :r  etc }  
-;;            or :piece-locations
-;;         :player-to-move :white or :black
-;;         or
-;;         :turn :white or :black
-;;         :castling-availability #{ :K :Q :k :q }
-;;         :en-passant-target-square
-;;         }
-;;
-;;  defn move
-;; From wikipedia:
-;; A FEN record contains six fields. The separator between fields is a space. The fields are:
-;; Piece placement (from white's perspective). Each rank is described, starting with rank 8 and ending with rank 1; within each rank, the contents of each square are described from file "a" through file "h". Following the Standard Algebraic Notation (SAN), each piece is identified by a single letter taken from the standard English names (pawn = :P, knight = :N, bishop = :B, rook = :r, queen = :Q and king = :K).[1] White pieces are designated using upper-case letters ("PNBRQK") while black pieces use lowercase ("pnbrqk"). Empty squares are noted using digits 1 through 8 (the number of empty squares), and "/" separates ranks.
-;; Active color. "w" means White moves next, :b means Black.
-;; Castling availability. If neither side can castle, this is "-". Otherwise, this has one or more letters: :K (White can castle kingside), :Q (White can castle queenside), :k (Black can castle kingside), and/or :q (Black can castle queenside).
-;; En passant target square in algebraic notation. If there's no en passant target square, this is "-". If a pawn has just made a two-square move, this is the position "behind" the pawn. This is recorded regardless of whether there is a pawn in position to make an en passant capture.[2]
-;; Halfmove clock: This is the number of halfmoves since the last capture or pawn advance. This is used to determine if a draw can be claimed under the fifty-move rule.
-;; Fullmove number: The number of the full move. It starts at 1, and is incremented after Black's move.
-;; Example:
-;; rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-;; w means white to move- "side to move"
-;; The KQkq indicates all 4 castles are elegible. 
 (defn position->fen[position]
 
   )
@@ -592,51 +562,77 @@
 
 
 (defn update-castling-availability[position move]
-
+ (if (empty? (:castling-availability position))
+  position
+  ;; else 
   (let [availability (:castling-availability position)]
+   
     (println availability)
     (assoc position :castling-availability
            (cond 
              (or 
-               (= (first move) [0 0])
+               (= (first move) [0 0]) ;; white queens rook
                (= (second move) [0 0]))
              (do
                (disj availability :Q)
                )
              (or 
-               (= (first move) [7 0])
+               (= (first move) [7 0])  ;; white kings rook
                (= (second move) [7 0]))
              (disj availability :K)
              (or 
-               (= (first move) [0 7])
+               (= (first move) [0 7]) ;; black queens rook
                (= (second move) [0 7]))
              (disj availability :q)
              (or 
-               (= (first move) [7 7])
+               (= (first move) [7 7])  ;; black kings rook
                (= (second move) [7 7]))
-             (disj availability :k)
+             (disj availability :k)   ;; white king moves
                (= (first move) [4 0])
-             (disj availability :K :Q)
+             (disj availability :K :Q) ;; black king moves
                (= (first move) [4 7])
              (disj availability :k :q)
              true
              availability
-             ))))
+             )))))
+
 (defn play-move[position move]
-  (when debug
+  (when true
     (println "move is " move)
-    (println "position is " position)
+   ;; (println "position is " position)
     )
-  (let [locs (:piece-locations position)
+
+  (let [
+        locs (:piece-locations position)
 
         piece (piece-at-location position (first move)) 
+        my-diff (- (first (first move))
+                   (first (second move)))
+        castled? (when (and (is-king? piece)
+                         (not (= 1 
+                              (Math/abs my-diff))))
+                   (if (white-to-move? position)
+                     ({2 :Q -2 :K} my-diff :oops)
+                     ({2 :q -2 :k} my-diff :oops)
+                     ))
+        _ (if castled? (println "YOU CASTLED!!!!" castled?))
         promoted-piece (if (and (is-pawn? piece)
                                 (location-at-eigth-rank? position
                                                          (second move)))
                          (choose-promoted-piece (:player-to-move position)) 
                          piece)
-        new-locs (-> locs (dissoc (first move))
-                     (assoc (second move) promoted-piece))
+
+        new-locs 
+        (if (= 4 (count move)) ;; castled 
+        (-> locs 
+            (dissoc (first move))
+            (dissoc (nth move 2))
+              (assoc (second move) promoted-piece)
+              (assoc  (nth move 3) (get locs (nth move 2)))
+            )
+          ;; else
+        (-> locs (dissoc (first move))
+                     (assoc (second move) promoted-piece)))
         ]
     (assert piece)
     (assert (friendly-square? position (first move)))
@@ -744,13 +740,70 @@
                     ))) 
           (enemy-pieces position)
           )))
+(defn castling-available-black-queenside?[position]
+ (and (contains? (:castling-availability position) :q)
+      (not (contains? (:piece-locations position) [2 7]))
+      (not (contains? (:piece-locations position) [3 7]))
+      )
+  )
 
+(defn castling-available-black-kingside?[position]
+ (and (contains? (:castling-availability position) :k)
+      (not (contains? (:piece-locations position) [6 7]))
+      (not (contains? (:piece-locations position) [5 7]))
+      )
+  )
+
+(defn castling-available-white-queenside?[position]
+ (and (contains? (:castling-availability position) :Q)
+      (unoccupied? position [2 0])
+      (unoccupied? position  [3 0])
+      ))
+  
+
+(defn castling-available-white-kingside?[position]
+ (and (contains? (:castling-availability position) :K)
+      (unoccupied? position [6 0])
+      (unoccupied? position [5 0])
+  ))
+
+
+
+(defn white-castling-moves[position]
+  (remove nil?
+   (vector 
+  (when (castling-available-white-kingside? position)
+     [[4 0] [6 0][7 0][5 0]])
+  (when (castling-available-white-queenside? position)
+     [[4 0] [2 0][0 0][3 0]])
+     ))
+  )
+(defn black-castling-moves[position]
+  (remove nil? (vector 
+  (when (castling-available-black-kingside? position)
+     [[4 7] [6 7][7 7] [5 7]])
+  (when (castling-available-black-queenside? position)
+     [[4 7] [2 7][0 7] [3 7]])
+               ) 
+  ))
+  
+(defn white-to-move?[position]
+  (= :white (:player-to-move position)))
+(defn black-to-move?[position]
+  (= :black (:player-to-move position)))
+
+;; (castling-moves starting-position)
+(defn castling-moves[position]
+  (if (white-to-move? position)
+    (white-castling-moves position)
+    (black-castling-moves position))) 
 
 (defn moves[position]
   (when debug
     (println "entering moves")
     (println "position is" position)
     )
+  (sort
   (remove (fn[my-move] (cond
                          (illegal-move? position my-move) 
                          true
@@ -759,7 +812,9 @@
                          true
                          false
                          ))
-          (mapcat 
+          (concat
+            (castling-moves position)
+          (mapcat ;; loop through pieces
             (fn[[loc piece]]  ;; destructure map entry
               (when debug (println "piece is" piece))
               (let [
@@ -784,7 +839,7 @@
                       (=   (piece-color piece)
                          (:player-to-move position))) 
                     (:piece-locations position))
-            )))
+            )))))
 
 (defn checkmate[position]
   (= :checkmate (:status position)))
@@ -818,10 +873,19 @@
     true
     false)
   )
+
+(defn looks-like-castling-move[move]
+  (= 4 (count move)))
 (defn choose-move[position]
-  (or (some #(if (is-capture? position %) %) (:moves position))
+  ;; prefer castling for testing!!
+  (let [favorite-moves 
+        (filter #(if (looks-like-castling-move %) %)
+            (:moves position))] 
+  (or (when (not (empty? favorite-moves))
+        (rand-nth favorite-moves))
+        (some #(if (is-capture? position %) %) (:moves position))
       (rand-nth (:moves position))
-      ))
+      )))
 ;; (choose-move starting-position)
 ;; (choose-move (string->position-and-print "Rn k K" :white))
 ;; (println (join (map name (:castling-availability starting-position)) ))
