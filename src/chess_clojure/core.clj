@@ -1020,7 +1020,10 @@
                       line) 
               (recur (read-line) position status)
             (game-done? position)
-            (println (:status position) "!!")
+            (do
+            (println "Game is done: " (:status position) "!!")
+              (recur (read-line) position status)
+              )
             (= "xboard" line)
               (recur (read-line) position :in-game)
             (= "go" line)
@@ -1038,8 +1041,9 @@
                             (choose-move new-position)) 
                   ] 
               (if (game-done? new-position)
-                (println (:status new-position))
-                ;; else
+                (do
+            (println "Game is done: " (:status new-position) "!!")
+              (recur (read-line) new-position status))
                 (do
               (println "move " (move->san my-move))
               (recur (read-line)

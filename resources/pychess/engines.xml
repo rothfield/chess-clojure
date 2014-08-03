@@ -1,0 +1,58 @@
+<engines version="0.10.1">
+    <engine binname="shatranj.py" protocol="cecp" protover="2">
+        <vm binname="python"><args><arg name="0" value="-u" /></args></vm>
+        <args><arg name="0" value="-xboard" /></args></engine>
+    <engine binname="gnome-gnuchess" protocol="cecp" protover="2">
+        <meta><country>us</country></meta>
+        <cecp-features><feature name="sigint" value="1" /></cecp-features>
+        </engine>
+    <engine binname="faile" protocol="cecp" protover="1">
+        <meta><country>ca</country></meta></engine>
+    <engine binname="phalanx" protocol="cecp" protover="1">
+        <meta><country>cz</country></meta></engine>
+    <engine binname="sjeng" protocol="cecp" protover="2">
+        <meta><country>be</country></meta></engine>
+    <engine binname="boochess" protocol="cecp" protover="1">
+        <meta><country>de</country></meta></engine>
+    <engine binname="amy" protocol="cecp" protover="2">
+        <meta><country>de</country><author>Thorsten Greiner</author></meta></engine>
+    <engine binname="amundsen" protocol="cecp" protover="1">
+        <meta><country>sw</country><author>John Bergbom</author></meta></engine>
+    
+    <engine binname="robbolito" protocol="uci" protover="1">
+        <meta><country>ru</country></meta></engine>
+    <engine binname="glaurung" protocol="uci" protover="1">
+        <meta><country>no</country></meta></engine>
+    <engine binname="ShredderClassicLinux" protocol="uci" protover="1">
+        <meta><country>de</country></meta></engine>
+    <engine binname="fruit_21_static" protocol="uci" protover="1"> 
+        <meta><country>fr</country></meta></engine>
+    <engine binname="fruit" protocol="uci" protover="1">
+        <meta><country>fr</country></meta></engine>
+    <engine binname="toga2" protocol="uci" protover="1">
+        <meta><country>de</country></meta></engine>
+    <engine binname="hiarcs" protocol="uci" protover="1">
+        <meta><country>gb</country></meta></engine>
+    <engine binname="diablo" protocol="uci" protover="1">
+        <meta><country>us</country><author>Marcus Predaski</author></meta></engine>
+
+    <engine binname="Houdini.exe" protocol="uci" protover="1">
+        <meta><country>be</country></meta>
+        <vm binname="wine" /></engine>
+    <engine binname="Rybka.exe" protocol="uci" protover="1">
+        <meta><country>ru</country></meta>
+        <vm binname="wine" /></engine>
+<engine binname="PyChess.py" protocol="cecp" protover="2" recheck="false">
+        <meta><country>dk</country><name>PyChess 0.10.1</name></meta>
+        <vm binname="python"><args><arg name="0" value="-u" /></args><path>/usr/bin/python</path><args /></vm><path>/usr/lib/python2.7/dist-packages/pychess/Players/PyChess.py</path><md5>d133254bb234e55bed01cf2bc1da6643</md5><args /><vm binname="python" /><cecp-features><feature name="san" value="1" /><feature name="sigint" value="0" /><feature name="colors" value="1" /><feature name="usermove" value="1" /><feature name="pause" value="0" /><feature name="playother" value="0" /><feature name="ping" value="0" /><feature name="smp" value="0" /><feature name="memory" value="0" /><feature name="ics" value="0" /><feature name="analyze" value="1" /><feature name="draw" value="1" /><feature name="reuse" value="0" /><feature name="myname" value="PyChess 0.10.1" /><feature name="setboard" value="1" /><feature name="variants" value="normal,nocastle,fischerandom" /><feature name="nps" value="0" /><feature name="name" value="0" /><feature name="egt" value="" /><feature name="time" value="1" /><feature name="debug" value="0" /><feature name="sigterm" value="1" /></cecp-features><options><check-option default="false" name="Ponder" /><check-option default="false" name="Random" /><spin-option default="false" max="-1" min="1" name="Depth" /></options></engine>
+    <engine binname="gnuchess" protocol="cecp" protover="2" recheck="false">
+        <meta><country>us</country><name>GNU Chess</name></meta>
+        <cecp-features><feature name="sigint" value="0" /><feature name="san" value="0" /><feature name="colors" value="0" /><feature name="usermove" value="1" /><feature name="pause" value="0" /><feature name="playother" value="1" /><feature name="ping" value="1" /><feature name="smp" value="0" /><feature name="memory" value="0" /><feature name="ics" value="1" /><feature name="analyze" value="1" /><feature name="draw" value="1" /><feature name="reuse" value="1" /><feature name="myname" value="GNU Chess" /><feature name="setboard" value="1" /><feature name="variants" value="normal" /><feature name="nps" value="0" /><feature name="name" value="1" /><feature name="egt" value="" /><feature name="time" value="1" /><feature name="debug" value="0" /><feature name="sigterm" value="0" /></cecp-features>
+        <path>/usr/games/gnuchess</path><md5>c03d56ac58bafb8a2a9ad7a3209fa85b</md5><args /><options><check-option default="false" name="Ponder" /><check-option default="false" name="Random" /><spin-option default="false" max="-1" min="1" name="Depth" /></options></engine>
+    <engine binname="crafty" protocol="cecp" protover="2" recheck="false">
+        <meta><country>us</country><name>Crafty-23.4</name></meta><path>/usr/games/crafty</path><md5>5105da5f150a6161237646c9f5116e72</md5><args /><cecp-features><feature name="san" value="1" /><feature name="sigint" value="0" /><feature name="colors" value="0" /><feature name="usermove" value="0" /><feature name="pause" value="0" /><feature name="playother" value="1" /><feature name="ping" value="1" /><feature name="smp" value="1" /><feature name="memory" value="1" /><feature name="ics" value="0" /><feature name="analyze" value="1" /><feature name="draw" value="1" /><feature name="reuse" value="1" /><feature name="myname" value="Crafty-23.4" /><feature name="setboard" value="1" /><feature name="variants" value="normal,nocastle" /><feature name="nps" value="0" /><feature name="name" value="1" /><feature name="egt" value="" /><feature name="time" value="1" /><feature name="debug" value="0" /><feature name="sigterm" value="0" /></cecp-features><options><check-option default="false" name="Ponder" /><check-option default="false" name="Random" /><spin-option default="false" max="-1" min="1" name="Depth" /></options></engine>
+    <engine binname="hoichess" protocol="cecp" protover="2" recheck="false">
+        <meta><country>de</country><name>HoiChess 0.10.3</name></meta><path>/usr/games/hoichess</path><md5>20ed727a1b57d8bd843ca2616f9c91b1</md5><args /><cecp-features><feature name="san" value="0" /><feature name="sigint" value="0" /><feature name="colors" value="0" /><feature name="usermove" value="0" /><feature name="pause" value="0" /><feature name="playother" value="0" /><feature name="ping" value="1" /><feature name="smp" value="0" /><feature name="memory" value="0" /><feature name="ics" value="0" /><feature name="analyze" value="1" /><feature name="draw" value="1" /><feature name="reuse" value="0" /><feature name="myname" value="HoiChess 0.10.3" /><feature name="setboard" value="1" /><feature name="variants" value="normal" /><feature name="nps" value="0" /><feature name="name" value="1" /><feature name="egt" value="" /><feature name="time" value="1" /><feature name="debug" value="0" /><feature name="sigterm" value="0" /></cecp-features><options><check-option default="false" name="Ponder" /><check-option default="false" name="Random" /><spin-option default="false" max="-1" min="1" name="Depth" /></options></engine>
+    <engine binname="stockfish" protocol="uci" protover="1" recheck="false">
+        <meta><country>no</country><name>Stockfish 111108 64bit</name><author>Tord Romstad, Marco Costalba and Joona Kiiski</author></meta><path>/usr/games/stockfish</path><md5>c61cbf0d8166d2c0568dbd2a3e2ebc3d</md5><args /><options><check-option default="True" name="Ponder" /><spin-option default="100" max="200" min="0" name="Space" /><spin-option default="40" max="50" min="0" name="Emergency Move Horizon" /><check-option default="False" name="UCI_Chess960" /><check-option default="False" name="Use Search Log" /><spin-option default="100" max="200" min="0" name="Mobility (Endgame)" /><spin-option default="32" max="8192" min="4" name="Hash" /><check-option default="False" name="UCI_AnalyseMode" /><check-option default="True" name="OwnBook" /><spin-option default="4" max="32" min="1" name="Threads" /><spin-option default="20" max="20" min="0" name="Skill Level" /><spin-option default="20" max="5000" min="0" name="Minimum Thinking Time" /><spin-option default="100" max="200" min="0" name="Passed Pawns (Middle Game)" /><button-option name="Clear Hash" /><spin-option default="100" max="200" min="0" name="Mobility (Middle Game)" /><spin-option default="4" max="7" min="4" name="Minimum Split Depth" /><string-option default="SearchLog.txt" name="Search Log Filename" /><check-option default="True" name="Use Sleeping Threads" /><spin-option default="5" max="8" min="4" name="Maximum Number of Threads per Split Point" /><spin-option default="1" max="500" min="1" name="MultiPV" /><spin-option default="100" max="200" min="0" name="Cowardice" /><string-option default="book.bin" name="Book File" /><spin-option default="100" max="200" min="0" name="Passed Pawns (Endgame)" /><check-option default="False" name="Best Book Move" /><spin-option default="200" max="30000" min="0" name="Emergency Base Time" /><spin-option default="100" max="200" min="0" name="Aggressiveness" /><spin-option default="70" max="5000" min="0" name="Emergency Move Time" /></options></engine>
+    <engine binname="rothfield_chess" protocol="cecp" protover="1" recheck="false"><path>/usr/games/rothfield_chess</path><md5>7b4f0007da4fcc52dc4dbc57105ed416</md5><args /><meta><name>Rothfield_chess, 21:08:27.149</name></meta><cecp-features><feature name="san" value="0" /><feature name="sigint" value="0" /><feature name="colors" value="1" /><feature name="usermove" value="0" /><feature name="pause" value="0" /><feature name="playother" value="0" /><feature name="ping" value="0" /><feature name="smp" value="0" /><feature name="memory" value="0" /><feature name="ics" value="0" /><feature name="analyze" value="0" /><feature name="draw" value="1" /><feature name="reuse" value="0" /><feature name="myname" value="Rothfield_chess, 21:08:27.149" /><feature name="setboard" value="0" /><feature name="variants" value="None" /><feature name="nps" value="0" /><feature name="name" value="0" /><feature name="egt" value="" /><feature name="time" value="1" /><feature name="debug" value="0" /><feature name="sigterm" value="0" /></cecp-features><options><check-option default="false" name="Ponder" /><check-option default="false" name="Random" /><spin-option default="false" max="-1" min="1" name="Depth" /></options></engine></engines>

@@ -6,22 +6,26 @@ Create an executable with
 
 lein uberjar
 
-I created a shell script called chess_engine.sh with the folowing contents and set it as
+I created a shell script called rothfield_chess.sh with the folowing contents and set it as
 executable and placed it in /usr/games
+Important: Put the executable in /usr/games and the chess programs seem to be able to find them!
+
 
 java -jar /home/john/chess_clojure/target/chess_clojure-0.1.0-SNAPSHOT-standalone.jar
 
 Then in the various chess programs that support xboard, point them to the script. 
 
+Notes on chess gui's:
+--------------------
+
 eboard: Worked. A permissive engine.
-knights: Crashing sometimes. ( due to illegal move ??).
-  Supports computer vs computer
-xboard: No
+knights: Crashes often. Too bad because it supports computer vs computer
+xboard: Works. Seemed to crash on stalemate. 
 scid: No
-pychess: Failed. Tried adding engine to engines.xml:  
+pychess: Works.
 vi /home/john/.config/pychess/engines.xml
 dreamchess: Works OK.
-glchess: Aborted after 3 moves 
+glchess: Works. Simple and fast! Easy GUI. No console window.
 ***** My recommendation: Use eboard on Linux or knights if it doesn't crash
 
 FIXME: description

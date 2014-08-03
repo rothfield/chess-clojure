@@ -1,5 +1,0 @@
-       Stockfish  is  a free UCI chess engine derived from Glaurung 2.1. It is not a complete chess program, but  requires  some  UCI  compatible  GUI (like  XBoard  with  PolyGlot, eboard, Jose, Arena, in order to be used comfortably.  Read the documentation for your GUI of choice for  infor‐ mation about how to use Stockfish with your GUI.
-guis:
-eboard
-xboard with polyglot
-
