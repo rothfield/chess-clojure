@@ -47,7 +47,9 @@
 ;;
 
 (def debug false)
+
 (declare moves locations-under-attack string->position string->position-and-print)
+
 (declare white-to-move? black-to-move?)
 
 (defn my-is-a?[my-type obj]
@@ -65,16 +67,15 @@
 ;; (println starting-position)
 ;; (castling-available-white-queenside? starting-position)
 (def starting-position-string
-;;  (join "\n" ["rnbqkbnr"
-  (join "\n" ["r   k  r "
+   (join "\n" [
+              "rnbqkbnr"
               "pppppppp"
               "        "
               "        "
               "        "
               "        "
               "PPPPPPPP"
-              "R   K  R\n"] ))
-          ;;    "RNBQKBNR\n"] ))
+              "RNBQKBNR\n"]))
 
 ;;
 (defn valid-location?
@@ -562,44 +563,44 @@
 
 
 (defn update-castling-availability[position move]
- (if (empty? (:castling-availability position))
-  position
-  ;; else 
-  (let [availability (:castling-availability position)]
-   
-    (println availability)
-    (assoc position :castling-availability
-           (cond 
-             (or 
-               (= (first move) [0 0]) ;; white queens rook
-               (= (second move) [0 0]))
-             (do
-               (disj availability :Q)
-               )
-             (or 
-               (= (first move) [7 0])  ;; white kings rook
-               (= (second move) [7 0]))
-             (disj availability :K)
-             (or 
-               (= (first move) [0 7]) ;; black queens rook
-               (= (second move) [0 7]))
-             (disj availability :q)
-             (or 
-               (= (first move) [7 7])  ;; black kings rook
-               (= (second move) [7 7]))
-             (disj availability :k)   ;; white king moves
-               (= (first move) [4 0])
-             (disj availability :K :Q) ;; black king moves
-               (= (first move) [4 7])
-             (disj availability :k :q)
-             true
-             availability
-             )))))
+  (if (empty? (:castling-availability position))
+    position
+    ;; else 
+    (let [availability (:castling-availability position)]
 
-(defn play-move[position move]
-  (when true
-    (println "move is " move)
-   ;; (println "position is " position)
+     ;; (println availability)
+      (assoc position :castling-availability
+             (cond 
+               (or 
+                 (= (first move) [0 0]) ;; white queens rook
+                 (= (second move) [0 0]))
+               (do
+                 (disj availability :Q)
+                 )
+               (or 
+                 (= (first move) [7 0])  ;; white kings rook
+                 (= (second move) [7 0]))
+               (disj availability :K)
+               (or 
+                 (= (first move) [0 7]) ;; black queens rook
+                 (= (second move) [0 7]))
+               (disj availability :q)
+               (or 
+                 (= (first move) [7 7])  ;; black kings rook
+                 (= (second move) [7 7]))
+               (disj availability :k)   ;; white king moves
+               (= (first move) [4 0])
+               (disj availability :K :Q) ;; black king moves
+               (= (first move) [4 7])
+               (disj availability :k :q)
+               true
+               availability
+               )))))
+
+(defn make-move-aux[position move]
+  (when false
+    (println "make-move-aux: move is " move)
+    ;; (println "position is " position)
     )
 
   (let [
@@ -609,13 +610,13 @@
         my-diff (- (first (first move))
                    (first (second move)))
         castled? (when (and (is-king? piece)
-                         (not (= 1 
-                              (Math/abs my-diff))))
+                            (not (= 1 
+                                    (Math/abs my-diff))))
                    (if (white-to-move? position)
                      ({2 :Q -2 :K} my-diff :oops)
                      ({2 :q -2 :k} my-diff :oops)
                      ))
-        _ (if castled? (println "YOU CASTLED!!!!" castled?))
+       ;;  _ (if castled? (println "YOU CASTLED!!!!" castled?))
         promoted-piece (if (and (is-pawn? piece)
                                 (location-at-eigth-rank? position
                                                          (second move)))
@@ -624,15 +625,15 @@
 
         new-locs 
         (if (= 4 (count move)) ;; castled 
-        (-> locs 
-            (dissoc (first move))
-            (dissoc (nth move 2))
+          (-> locs 
+              (dissoc (first move))
+              (dissoc (nth move 2))
               (assoc (second move) promoted-piece)
               (assoc  (nth move 3) (get locs (nth move 2)))
-            )
+              )
           ;; else
-        (-> locs (dissoc (first move))
-                     (assoc (second move) promoted-piece)))
+          (-> locs (dissoc (first move))
+              (assoc (second move) promoted-piece)))
         ]
     (assert piece)
     (assert (friendly-square? position (first move)))
@@ -640,25 +641,49 @@
     (-> position 
         (update-castling-availability move)
         (assoc :piece-locations new-locs)
-        flip-position
-        update-position)
+        )
     ))
+
+
+(defn play-move[position move]
+   (->     (make-move-aux position move)
+       flip-position
+  update-position))
 
 
 (defn enemy-king-at-location?[position location]
   (let [piece (if (= :white (:player-to-move position)) :k :K)]
     (= piece (piece-at-location position location))))
 
+(defn my-king-location[position]
+  (let [piece (if (= :white (:player-to-move position)) :K :k)]
+    (some #(when (= piece (second %)) (first %)) (:piece-locations position))))
+;; (my-king-location starting-position)
+
+;; (println test-position)
+;; (println (position->string test-position))
+;; (println (moves test-position))
+
+;; (illegal-move? test-position [[0 0][0 1]])
 (defn illegal-move?[position move]
-  false
-  ;; TODO: 
-  ;;
-  ;; (let [resulting-position (try-move position move)]
+
+  ;; Return true, if the move, when played, results in a position
+  ;; where the current player's king is in check
+   (let [resulting-position (make-move-aux position move)
+         under-attack (locations-under-attack resulting-position)
+         king-location (my-king-location resulting-position) 
+         ]
+         (when debug
+           (println resulting-position)
+          (println "under-attack=" under-attack)
+           )
+     (contains? under-attack king-location)
+     ))
   ;;
   ;;   (some (fn[move2] (enemy-king-at-location? resulting-position
   ;;                                            (second move2)))
   ;;       (moves resulting-position))
-  )
+  
 
 (defn non-ranging-attack-locations[position location rules]
   "returns locations, including captures. For king and knight"
@@ -705,16 +730,6 @@
           (:piece-locations position))
   )
 
-;; (println (locations-under-attack starting-position))
-
-(defn test-king-attack-sphere[]
-  (string->position-and-print (str
-                                "   K  \n"
-                                "       \n"
-                                "    k\n"
-                                "\n \n \n \n "
-                                )
-                              :black))
 
 
 (defn locations-under-attack[position]
@@ -740,53 +755,68 @@
                     ))) 
           (enemy-pieces position)
           )))
-(defn castling-available-black-queenside?[position]
- (and (contains? (:castling-availability position) :q)
-      (not (contains? (:piece-locations position) [2 7]))
-      (not (contains? (:piece-locations position) [3 7]))
-      )
+
+(defn under-attack? [position location]
+  (contains? (:locations-under-attack position)
+             location)
+
   )
+(defn castling-available-black-queenside?[position]
+   (and
+       (= (piece-at-location position [0 7]) "r")
+       (unoccupied? position [1 7])
+       (unoccupied? position [2 7])
+       (unoccupied? position  [3 7])
+       (= (piece-at-location [4 7]) "k")
+       ))
 
 (defn castling-available-black-kingside?[position]
- (and (contains? (:castling-availability position) :k)
-      (not (contains? (:piece-locations position) [6 7]))
-      (not (contains? (:piece-locations position) [5 7]))
-      )
+  (and (contains? (:castling-availability position) :k)
+       (= (piece-at-location position [4 7]) "k")
+       (unoccupied? position [5 7])
+       (unoccupied? position [6 7])
+       (= (piece-at-location position [7 7]) "r")
+       )
   )
 
 (defn castling-available-white-queenside?[position]
- (and (contains? (:castling-availability position) :Q)
-      (unoccupied? position [2 0])
-      (unoccupied? position  [3 0])
-      ))
-  
+  (and (contains? (:castling-availability position) :Q)
+       (= (piece-at-location position [0 0]) "R")
+       (unoccupied? position [1 0])
+       (unoccupied? position [2 0])
+       (unoccupied? position  [3 0])
+       (= (piece-at-location [4 0]) "K")
+       ))
+
 
 (defn castling-available-white-kingside?[position]
- (and (contains? (:castling-availability position) :K)
-      (unoccupied? position [6 0])
-      (unoccupied? position [5 0])
-  ))
+  (and (contains? (:castling-availability position) :K)
+       (= (piece-at-location position [4 0]) "K")
+       (unoccupied? position [6 0])
+       (unoccupied? position [5 0])
+       (= (piece-at-location [7 0]) "R")
+       ))
 
 
 
 (defn white-castling-moves[position]
   (remove nil?
-   (vector 
-  (when (castling-available-white-kingside? position)
-     [[4 0] [6 0][7 0][5 0]])
-  (when (castling-available-white-queenside? position)
-     [[4 0] [2 0][0 0][3 0]])
-     ))
+          (vector 
+            (when (castling-available-white-kingside? position)
+              [[4 0] [6 0][7 0][5 0]])
+            (when (castling-available-white-queenside? position)
+              [[4 0] [2 0][0 0][3 0]])
+            ))
   )
 (defn black-castling-moves[position]
   (remove nil? (vector 
-  (when (castling-available-black-kingside? position)
-     [[4 7] [6 7][7 7] [5 7]])
-  (when (castling-available-black-queenside? position)
-     [[4 7] [2 7][0 7] [3 7]])
-               ) 
-  ))
-  
+                 (when (castling-available-black-kingside? position)
+                   [[4 7] [6 7][7 7] [5 7]])
+                 (when (castling-available-black-queenside? position)
+                   [[4 7] [2 7][0 7] [3 7]])
+                 ) 
+          ))
+
 (defn white-to-move?[position]
   (= :white (:player-to-move position)))
 (defn black-to-move?[position]
@@ -804,42 +834,42 @@
     (println "position is" position)
     )
   (sort
-  (remove (fn[my-move] (cond
-                         (illegal-move? position my-move) 
-                         true
-                         (is-king? (piece-at-location position (second my-move))) 
-                         true
-                         true
-                         false
-                         ))
-          (concat
-            (castling-moves position)
-          (mapcat ;; loop through pieces
-            (fn[[loc piece]]  ;; destructure map entry
-              (when debug (println "piece is" piece))
-              (let [
-                    piece-info (pieces-info piece)]
-                (when debug
-                  (println "piece-info is" piece-info)
-                  (println "piece is" piece))
-                (assert piece-info)
-                ;; use case ???
-                (cond (:ranging piece-info) ;; r,q, b
-                      (ranging-moves position loc (:rules piece-info)) 
-                      (is-pawn? piece) ;; p
-                      (pawn-moves position loc) 
-                      (is-knight? piece) ;; n 
-                      (non-ranging-moves position loc (:rules piece-info)) 
-                      (is-king? piece) ; k 
-                      (:king-moves position)
-                      true
-                      (assert false)
-                      ))) 
-            (filter (fn[[_ piece]]
-                      (=   (piece-color piece)
-                         (:player-to-move position))) 
-                    (:piece-locations position))
-            )))))
+    (remove (fn[my-move] (cond
+                           (illegal-move? position my-move) 
+                           true
+                           (is-king? (piece-at-location position (second my-move))) 
+                           true
+                           true
+                           false
+                           ))
+            (concat
+              (castling-moves position)
+              (mapcat ;; loop through pieces
+                      (fn[[loc piece]]  ;; destructure map entry
+                        (when debug (println "piece is" piece))
+                        (let [
+                              piece-info (pieces-info piece)]
+                          (when debug
+                            (println "piece-info is" piece-info)
+                            (println "piece is" piece))
+                          (assert piece-info)
+                          ;; use case ???
+                          (cond (:ranging piece-info) ;; r,q, b
+                                (ranging-moves position loc (:rules piece-info)) 
+                                (is-pawn? piece) ;; p
+                                (pawn-moves position loc) 
+                                (is-knight? piece) ;; n 
+                                (non-ranging-moves position loc (:rules piece-info)) 
+                                (is-king? piece) ; k 
+                                (:king-moves position)
+                                true
+                                (assert false)
+                                ))) 
+                      (filter (fn[[_ piece]]
+                                (=   (piece-color piece)
+                                   (:player-to-move position))) 
+                              (:piece-locations position))
+                      )))))
 
 (defn checkmate[position]
   (= :checkmate (:status position)))
@@ -854,17 +884,49 @@
     (println position)
     position))
 
+(defn test-king-attack-sphere[]
+  (string->position-and-print (str
+                                "   K  \n"
+                                "       \n"
+                                "    k\n"
+                                "\n \n \n \n "
+                                )
+                              :black))
+
+
 ;; (filter (partial unoccupied? enemy-position)
+(declare play-game xboard-server)
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (cond
+    (= "--demo" (first args))
+    (play-game))
+  true
+  (do
+    (println "Chess written in Clojure. by John Rothfield \nrthfield@sonic.net")
+    (xboard-server)
+    ))
 
 (def starting-position
   (string->position starting-position-string :white))
+(def testpos2
+  (string->position (str 
+                          "PP   k\n"
+                          "K r     ")
+                    :white))
 
-(println "starting position\n" starting-position)
+(def test-position
+  (string->position (str 
+                      "        \n"
+                      "   k     \n"
+                      "  b    \n"
+                      "       \n"
+                      "R  QK  R\n"
+                         )
+                    :white))
+
+;;(println "starting position\n" starting-position)
 ;;(println 
 ;; (string->position starting-position-string :black))
 
@@ -880,16 +942,112 @@
   ;; prefer castling for testing!!
   (let [favorite-moves 
         (filter #(if (looks-like-castling-move %) %)
-            (:moves position))] 
-  (or (when (not (empty? favorite-moves))
-        (rand-nth favorite-moves))
+                (:moves position))] 
+    (or (when (not (empty? favorite-moves))
+          (rand-nth favorite-moves))
         (some #(if (is-capture? position %) %) (:moves position))
-      (rand-nth (:moves position))
-      )))
+        (rand-nth (:moves position))
+        )))
 ;; (choose-move starting-position)
 ;; (choose-move (string->position-and-print "Rn k K" :white))
 ;; (println (join (map name (:castling-availability starting-position)) ))
 ;;  (->>  starting-position :castling-availability (map name)  join println))
+
+(def char->num
+  {\a 0 \b 1 \c 2 \d 3 \e 4 \f 5 \g 6 \h 7})
+
+(def digit->num
+  {\1 1 \2 2 \3 3 \4 4 \5 5 \6 6 \7 7 \8 8})
+
+(defn san->move[position x]
+ ;;  
+  (cond 
+    (and (= "e8g8" x)
+             (is-king?
+                          (piece-at-location position [4 8])))
+         [[4 8] [6 8] [7 8] [5 8]]
+    (and (= "e8c8" x)
+             (is-king? 
+                          (piece-at-location position [4 8])))
+         [[4 8] [2 8] [0 8] [3 8]]
+
+    (and (= "e1c1" x) ;; castle queenside
+             (is-king?
+              (piece-at-location position [4 0])))
+         [[4 0] [2 0] [0 0] [3 0]]
+    (and (= "e1g1" x) ;; castle kingside
+             (is-king? 
+             (piece-at-location position [4 0])))
+         [[4 0] [6 0] [7 0] [5 0]]
+        true
+  (let [[x1 y1 x2 y2] (vec x)
+        ]
+  [ [ 
+       (char->num x1)
+       (dec  (digit->num y1))
+     ]
+   [
+       (char->num x2)
+       (dec  (digit->num y2))
+   ]    
+]
+  )))
+;;; (println (move->san [[0 0] [1 1]]))
+(defn move->san[[[x1 y1][x2 y2]]]
+  ;; TODO: handle castling!!
+  (str 
+       (num->alpha x1)
+       (inc y1)
+       (num->alpha x2)
+       (inc y2) 
+       ) 
+  )
+
+
+(defn game-done?[position]
+     (not (= :active (:status position)))
+  )
+ ;; (println (choose-move starting-position))
+(defn xboard-server[]
+  ;;; knights on Linux seems to work well!
+  (println "rothfield's xboard server")
+    (loop [line (read-line)
+           position starting-position
+           status :not-in-game
+           ]
+       ;;    (Thread/sleep 500)
+      (cond (contains? #{"protover 2" "nopost" "hard" "st 20"}
+                      line) 
+              (recur (read-line) position status)
+            (game-done? position)
+            (println (:status position) "!!")
+            (= "xboard" line)
+              (recur (read-line) position :in-game)
+            (= "go" line)
+              (let [move (choose-move position)]
+              (println "move " (move->san move))
+              (recur (read-line) (play-move position move) :in-game)
+              )
+            (= "new" line)
+              (recur (read-line) starting-position :in-game)
+
+            (re-matches #"[a-h][1-8][a-h][1-8].?" line)
+            (let [your-move (san->move position line)
+                  new-position (play-move position your-move)
+                  my-move (when (not (game-done? new-position))
+                            (choose-move new-position)) 
+                  ] 
+              (if (game-done? new-position)
+                (println (:status new-position))
+                ;; else
+                (do
+              (println "move " (move->san my-move))
+              (recur (read-line)
+                     (play-move new-position my-move) :in-game))))
+            true
+              (recur (read-line) position status))
+            
+      ))
 (defn play-game[]
   (let [noisy false]
     (println "\n\n\n")
@@ -899,11 +1057,11 @@
 
       (when noisy (println move-ctr))
       (when true
-      (println (position->string position))
-      (println 
-        (-> (map name (:castling-availability position)) (join "\n") println)
-        )
-      (Thread/sleep 1000)
+        (println (position->string position))
+        (println 
+          (-> (map name (:castling-availability position)) (join "\n") println)
+          )
+        (Thread/sleep 1000)
         )
 
       (when (zero? (mod move-ctr 2000))
