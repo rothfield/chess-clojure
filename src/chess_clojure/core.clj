@@ -115,21 +115,6 @@
        (inc y2) 
        ) 
   )
-;;; Write a program that will generate legal moves.
-;; coordinat
-
-
-
-;; 
-;; [0 0] :r
-;; [1 0] :N
-;; ....
-;; [0 7] :r
-;;
-
-
-(comment
-  "Each location of the chessboard is identified by a unique coordinate pair—a letter and a number. The vertical column of squares (called files) from White's left (the queenside) to his right (the kingside) are labeled a through h. The horizontal rows of squares (called ranks) are numbered 1 to 8 starting from White's side of the board. Thus each square has a unique identification of file letter followed by rank number. (For example, White's king starts the game on square e1; Black's knight on b8 can move to open squares a6 or c6.)")
 
 (defn is-knight?[x]
   (contains? #{:n :N} x)
@@ -172,23 +157,35 @@
         ]
     [x y]))
 
+;;[FEN
+;;
+;;(def fen-str "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+;; (println (position->string (fen->position fen-str)))
+(defn fen->position[x]
+  (let [ [ fen-str player-to-move castling-state ] (clojure.string/split x #" ")]
+  ;; x is a fen string
+(string->position  (-> fen-str  (.replaceAll "/" "\n")
+  (.replaceAll "8" "        ")
+  (.replaceAll "7" "       ")
+  (.replaceAll "6" "      ")
+  (.replaceAll "5" "     ")
+  (.replaceAll "4" "    ")
+  (.replaceAll "3" "   ")
+  (.replaceAll "2" "  ")
+     ) (get {"w" :white :b :black} player-to-move)     )))
+;;[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
 
-
-(defn position->fen[position]
-
-  )
-
+(declare position->string)  
 
 (defn display-piece[piece]
-  (if (nil? piece)
-    " "
-    (name piece))
-  )
+  (if (nil? piece) " "
+    (name piece)))
 
 (defn display-to-move[position]
   (str (name (:player-to-move position)) " to move:\n\n"))
 
 (defn position->string[position]
+ ;; (println "position->string, positon: " position)
   ;;  (assert is-position? position)
   (str
     (display-to-move position)
@@ -294,6 +291,7 @@
 
 
 (defn non-ranging-moves[position location rules]
+  ;;; includes captures
   (map (fn[loc2] [location loc2])
        (remove (fn[loc2] (friendly-square? position loc2))
                (filter on-board? 
@@ -305,6 +303,8 @@
 (def is-ranging? #{:q :Q :b :B :R :r})
 
 (defn ranging-moves-in-direction[position location direction-fn]
+  ;; includes captures
+  ;;;;
   ;; location is the location of the friendly piece in question 
   ;; direction-fn generate locations to test using a function applied to the range 1..infinity
   ;; Finished when 
@@ -454,6 +454,7 @@
                              king-rules) 
           ))
 
+;;; why??
 (def piece-letter #{"r" "R" "N" "n" "B" "b" "Q" "q" "K" "k" "P" "p"})
 
 (defn string->position-base[string color]
@@ -464,6 +465,7 @@
   (let [lines (vec (reverse (clojure.string/split-lines string)))
         ]
     { :type :position
+     :identifier "start"  ;;; Not unique! put move here!!! [[5 1] [5 3]]
      :castling-availability #{ :K :Q :k :q }
      :player-to-move color
      :piece-locations
@@ -489,7 +491,12 @@
    :pre [(string? string)
          (is-color? color)] }
   (update-position (string->position-base string color)))
-
+;;; (println (position->string (string->position "K k r R" :white)))
+(defn test-fen->position[]
+   (let [fen-str "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+   (-> fen-str fen->position position->string println) 
+  ))
+;; (println (test-fen->position))
 
 ;; (insufficient-material  (string->position-and-print "k K" :white))
 (defn insufficient-material[position]
@@ -597,6 +604,22 @@
                availability
                )))))
 
+(defn move->san[move]
+  (if (nil? move)
+     "No moves possible"
+ (let [  [[x1 y1][x2 y2]]   move]
+  
+  ;; TODO: handle castling!!
+  (str 
+       (num->alpha x1)
+       (inc y1)
+       (num->alpha x2)
+       (inc y2) 
+       ) 
+  )))
+
+
+
 (defn make-move-aux[position move]
   (when false
     (println "make-move-aux: move is " move)
@@ -641,10 +664,12 @@
     (-> position 
         (update-castling-availability move)
         (assoc :piece-locations new-locs)
+        (assoc :identifier (move->san move))
         )
     ))
 
 
+;; make a child node
 (defn play-move[position move]
    (->     (make-move-aux position move)
        flip-position
@@ -871,10 +896,10 @@
                               (:piece-locations position))
                       )))))
 
-(defn checkmate[position]
+(defn checkmate?[position]
   (= :checkmate (:status position)))
 
-(defn stalemate[position]
+(defn stalemate?[position]
   (= :stalemate (:status position)))
 
 
@@ -938,7 +963,10 @@
 
 (defn looks-like-castling-move[move]
   (= 4 (count move)))
-(defn choose-move[position]
+
+
+(declare choose-move minimax)
+(defn old-choose-move[position]
   ;; prefer castling for testing!!
   (let [favorite-moves 
         (filter #(if (looks-like-castling-move %) %)
@@ -993,15 +1021,6 @@
 ]
   )))
 ;;; (println (move->san [[0 0] [1 1]]))
-(defn move->san[[[x1 y1][x2 y2]]]
-  ;; TODO: handle castling!!
-  (str 
-       (num->alpha x1)
-       (inc y1)
-       (num->alpha x2)
-       (inc y2) 
-       ) 
-  )
 
 
 (defn game-done?[position]
@@ -1052,6 +1071,30 @@
               (recur (read-line) position status))
             
       ))
+
+;; set king to 0 for now
+(def whites-piece-value-lookup {:p -1 :n -3 :b -3 :q -9 :r -5 
+                          :k 0  :K 0   :P 1 :N 3 :B 3 :Q 9 :R 5})
+(def blacks-piece-value-lookup {:k 0 :K 0 :p 1 :n 3 :b 3 :q 9 :r 5 
+                                :P -1 :N -3 :B -3 :Q -9 :R -5})
+(defn evaluate-position[position]
+  (cond (checkmate? position)
+        ({:w 10000 :b -10000} (:player-to-move position))
+   (not (= :active (:status position))) 
+      {:draw-by-insufficient-material 0
+       :stalemate 0}
+      ;; else 
+        true
+  (let [tbl (if (white-to-move? position) whites-piece-value-lookup
+                blacks-piece-value-lookup)]
+ (apply + (map #(get tbl %) 
+   (map second (:piece-locations position)))))))
+  
+ (evaluate-position starting-position)
+
+
+
+  
 (defn play-game[]
   (let [noisy false]
     (println "\n\n\n")
@@ -1202,4 +1245,93 @@
 ;;(println "running tests")
 ;;(run-tests)
 
+(def MINIMAX-DEPTH 4)
+
+(defn terminal-node?[position]
+  (game-done? position)
+ )
+
+
+(defn heuristic-value-of-node[node]
+
+   (evaluate-position node)
+  )
+;; (println (choose-move starting-position))
+(declare minimax-aux)
+(defn choose-move[position]
+  (let [z (minimax-aux position 3 true)]
+ (:identifier (last (sort-by :value (:children z)))
+  ))
+ ;; (map (fn[move] 
+ ;; (minimax position 1))
+
+;; (test-minimax)
+;; (println  (:value (test-minimax)))
+;;(println (map :value (test-minimax)))
+;; (minimax starting-position 1 true)
+  ;;         (heuristic-value-of-node starting-position)
+
+(defn leaf-node?[node depth]
+     (or (zero? depth) (terminal-node? node)))
+
+(defn minimax-aux[position minimax-depth my-maximizing-player]
+   (loop [node position
+          depth minimax-depth
+          maximizing-player my-maximizing-player]
+     (if (leaf-node? node depth)
+          { :identifier (:identifier node)
+           :value  (if maximizing-player
+                     (heuristic-value-of-node node)
+                     (* -1 (heuristic-value-of-node node)))
+                     }
+        (let [children (map 
+                      (fn[my-move] (minimax-aux 
+                                        (play-move node my-move)
+                                        (dec depth)
+                                        (not maximizing-player)))
+                          (moves node)) 
+              ]
+        { :identifier (:identifier node)
+          :children children
+          :value (apply (get {true max false min} maximizing-player)
+                       (map :value children))
+                       }
+          ))))
+
+(defn minimax[position]
+  (minimax-aux position 4 true))
+
+(defn test-minimax[]
+  (let [position (string->position-and-print (str 
+                                  "    \n"
+                                  "P   \n"
+                                  "   P \n"
+                                  "P    \n" 
+                                  "K    \n"
+                                  "    \n"
+                                  "k  p \n" 
+                                  "   " 
+                                  ) :white)]
+    (pprint (minimax-aux position 1 true))
+    (is (pos? 
+           (:value (minimax-aux position 1 true))))
+    (is (neg? 
+           (:value (minimax-aux position 2 true))))
+    
+    ))
+;; (test-minimax)
+  ;;  if depth = 0 or node is a terminal node
+   ;;     return the heuristic value of node
+    ;;if maximizingPlayer
+     ;;   bestValue := -∞
+      ;;  for each child of node
+       ;;     val := minimax(child, depth - 1, FALSE)
+        ;;    bestValue := max(bestValue, val)
+       ;; return bestValue
+  ;;  else
+   ;;     bestValue := +∞
+    ;;    for each child of node
+     ;;       val := minimax(child, depth - 1, TRUE)
+      ;;      bestValue := min(bestValue, val)
+       ;; return bestValue
 
