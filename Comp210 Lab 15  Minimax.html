@@ -1,0 +1,308 @@
+
+<!-- saved from url=(0054)http://www.owlnet.rice.edu/~comp210/02fall/Labs/Lab15/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Comp210 Lab 15: Minimax </title>
+</head>
+
+<body>
+<h1 align="center" style="line-height: 100%">Comp210 Lab 15: <br>
+ Connect 5 Strategies</h1>
+
+<p><a href="http://www.owlnet.rice.edu/~comp210/02fall/Labs/Lab15/#static">Static Board Evaluation</a>, 
+<a href="http://www.owlnet.rice.edu/~comp210/02fall/Labs/Lab15/#minimax">Minimax</a>, 
+<a href="http://www.owlnet.rice.edu/~comp210/02fall/Labs/Lab15/#pruning">Alpha-Beta Pruning</a>
+</p>
+
+<p align="center">
+(You don't need this lab to do the Project.
+It talks about an improved way of extending a static valuation function
+to a search-ahead method, by pruning off parts of the search
+when you can tell they're not better than some other part of the your search.)
+</p>
+
+<hr>
+
+
+<a name="static"><h2>Static Board Evaluation</h2></a>
+
+
+<p>
+If you are simply given a board position, how can you figure out what 
+move
+is best?  The basic approach is to assume that you can give a numeric
+value to any board position.  E.g., if the game is over and you have 
+won,
+it should receive the best possible value, let's say +1.0.  If the
+game is over and you have lost, it should receive the lowest possible
+value, let's say -1.0.  A draw would be in the middle, or 0.
+</p>
+
+<p>
+Can you come up with a way to assign a value for other board positions,
+when the game isn't done yet?  This is the hard part.
+</p>
+
+<p> One basic approach is to come up with some heuristics based on game strategy. 
+  E.g., for Connect 5, I might look at the number of 4-in-a-rows, 3-in-a-rows, 
+  and 2-in-a-rows I have and somehow add them up, and subtract the 4-in-a-rows, 
+  3-in-a-rows, and 2-in-a-rows my opponent has, weighting the 4-in-a-rows most 
+  heavily. This valuing isn't necessarily 100% accurate, but it's easy to do. 
+  In my code, I would write a function that finds a move that maximizes the value. 
+  (I don't necessarily need a function that computes the value of the current 
+  board.&nbsp; Think about why this is the case.) This should find any immediately 
+  winning move, and do a reasonable job otherwise.</p>
+
+<hr>
+
+<a name="minimax"><h2>The Minimax Algorithm</h2></a>
+
+<p> Another basic approach just extends the previous one to look ahead several moves.
+  In order to find out 
+  what move to make, I'll see what would happen if I made each of the possible 
+  moves. After I make a move, my opponent gets to move. After that, I can make 
+  a move, then my opponent, etc., until the game ends. This makes a (large) tree 
+  of game positions, with the children of a game position being all those obtained 
+  after a possible move. </p>
+<p><img src="./Comp210 Lab 15  Minimax_files/ttt-minimax.jpg" width="638" height="453"></p>
+<p><i>Diagram 1. An example of simple minimax algorithm on the game of tic-tac-toe.</i> 
+</p>
+
+<p>
+I can easily assign values to these final won, lost, or drawn positions.
+Working backwards, I want to assign values to earlier positions, based
+on what happens later.  If I'm forced to lose a move later, that's as
+bad as having lost.  Along the way, I should always pick my best move,
+i.e., the one with the maximum value, whenever it is my turn.
+I should also assume that my opponent is just as smart and picking 
+his/her
+best move, i.e., the one with the minimal value, whenever it is his/her 
+turn.
+</p>
+
+<p>The minimax algorithm describes perfect play for deterministic, perfect-information 
+  games. The goal of the algorithm is to achieve the best payoff against best 
+  play.</p>
+<p>Minimax Properties:</p>
+<ul>
+  <li>Depth-first search</li>
+  <li>Complete: Yes, if tree is finite (chess has specific rules for this) </li>
+  <li>Optimal: Yes, against an optimal opponent. Otherwise?? </li>
+  <li>Time Complexity: O(b^m) (depth m with b moves possible, on average) </li>
+  <li>For chess, b is about 35 and m is about 100 for ``reasonable'' games.
+      (How many times big is 35^100 than the number of particles (protons, photons, etc) in the 
+      universe, 10^80?</li>
+  <li>Advantages? Disadvantages? 
+    <p></p>
+  </li>
+</ul>
+<p></p>
+<p>Minimax Algorithm:</p>
+<pre>Minimax(state, my-turn?)</pre>
+<ol>
+  <li>
+    if <code>(final? state)</code>, return a valuation of the board (one of {WIN, LOSS, DRAW})
+  </li>
+  <li>
+    Otherwise {results} = map <code>(lambda (a-next-state) (minimax a-next-state (not my-turn?)))</code> onto <code>(successors-of state)</code>
+    <ul>
+      <li>
+        if my-turn?, return <code>(maximum {results})</code> with corresponding moves.
+      </li>
+      <li>
+        if not my-turn?: return <code>(minimum {results})</code> with corresponding moves.
+      </li>
+    </ul>
+  </li>
+</ol>
+<h5>Combining the minimax algorithm with static board evaluation</h5>
+
+<p> Thinking ahead for the rest of the game is impractical except for very simple 
+  games (like tic-tac-toe). This is because there can be a <strong>very large</strong> 
+  number of moves and board positions. In practice, I can only think ahead a few 
+  moves. This still generates a tree of moves and board positions, but one where 
+  the leaves are not necessarily finished games. Instead, I need to use my heuristic 
+  board evaluation routine to estimate the values of these positions.</p>
+<p>Modified Minimax Algorithm:</p>
+<pre>Minimax(state, depth, turn)</pre>
+<ol>
+  <li>
+    if <code>(zero? depth)</code> then return <code>(static-board-evaluation state)</code>
+  </li>
+  <li>
+    Otherwise {results} = map <code>(lambda (a-next-state) (minimax a-next-state (sub1 depth) (not my-turn?)))</code> onto <code>(successors-of state)</code>
+    <ul>
+      <li>
+        if my-turn?, return <code>(maximum {results})</code> with corresponding moves.
+      </li>
+      <li>
+        if not my-turn?: return <code>(minimum {results})</code> with corresponding moves.
+      </li>
+    </ul>
+  </li>
+</ol>
+<p>
+You'll have a hard time searching more than 2 moves ahead in the time
+alotted.  Compare to the 8+ moves that good human chess players
+look ahead or the 14+ moves that Deep Blue chess program looks ahead.
+</p>
+
+<p>
+All this said, 
+<em>a good valuation function can make or break your searching</em>.
+For instance, the 2001-fall Connect5 tournament winner did no searching -- her program
+took &lt; 2sec per move.
+</p>
+
+<hr>
+
+<a name="minimax"><h2>
+Alpha-Beta Pruning
+</h2></a>
+
+<p>We can improve on the performance of the minimax algorithm through the use 
+  of alpha-beta pruning. The idea is that we can prevent ourselves from exploring 
+  branches of the game tree that are not worth exploring (because they will have 
+  no effect on the final outcome. Consider the following situation:</p>
+<p><img src="./Comp210 Lab 15  Minimax_files/alpha33.jpg" width="574" height="330"></p>
+<p>The minimax algorithm provides us with the optimal path as expected. But did 
+  we really need to do all that work? In particular, look at nodes 5 and 4. Lets 
+  pretend that we are at the middle level stage of finding the minimum value between 
+  nodes 6, 5, and 4. We have already calculated the value of node 6. So, we are 
+  at least guaranteed that the minimum value between these 3 nodes is &lt;= 6. 
+  <br>
+  <em>But wait!</em> On the level above (top level), we are trying to maximize the values. 
+  We've already calculated a value of 7 to the left. Something that is guaranteed 
+  to be 6 or less will never be greater than 7, so why go any further with the 
+  calculations?</p>
+<p><img src="./Comp210 Lab 15  Minimax_files/alpha2.gif" width="574" height="330"></p>
+<p>Mentally trace through the steps to convince yourself of this. The same property 
+  holds true for nodes 1 and 2.</p>
+<p>Modified Minimax Algorithm with Alpha-Beta Pruning:</p>
+<pre>inputs:
+	state - current state of game
+	depth - number of lookaheads remaining
+	my-turn? - whose turn it is (also indicates whether we maximize or minimize)
+	alpha - the best score for max along the path to state
+	beta - the best score for min along the path to state
+
+
+Minimax(state, depth, my-turn?, alpha, beta)</pre>
+<ul>
+  <li> 
+    <pre>if (Lookahead-Limit-Reached? depth) then return (static-board-evaluation state)</pre>
+  </li>
+  <li> 
+    <pre>Otherwise</pre>
+    <ul>
+      <li> 
+        <pre>if my-turn? (maximizing):
+	alpha = -infinity 
+	for each s in {Successors state) 
+		alpha = (maximum alpha (Minimax s (sub1 depth) (not my-turn?) alpha beta))
+		if (&gt; alpha beta) return alpha	
+	end
+	return alpha</pre>
+      </li>
+      <li> 
+        <pre>if not my-turn? (minimizing):
+	beta = +infinity 	
+	for each s in {Successors state) 
+		beta = (minimum beta (Minimax s (sub1 depth) (not my-turn?) alpha beta))
+		if (&lt; beta alpha) return beta	
+	end
+	return beta</pre>
+      </li>
+    </ul>
+  </li>
+</ul>
+<hr>
+
+<h2>
+
+<a name="lists">Final Thoughts</a>
+</h2>
+
+<h4>Faster = Smarter (?)</h4>
+
+
+<p>
+The number 1 way to think of strategies:
+play the game by hand, with friends!
+You can both discuss why you are trying various moves,
+to see what does and doesn't work.
+</p>
+
+<p>
+If you are going for the extra credit, 
+be sure to <em>first</em> get a solid, working version of the program,
+before progessing on to making it better.
+</p>
+
+<p>
+Making your board evaluator smarter generally makes it slower.  You look
+for more kinds of patterns to make more interesting distinctions.
+Making your game tree search smarter generally means making it search
+more of the tree.  You can try to make the search faster so that you
+can look another move ahead.  Or you can try to figure out what parts
+of the tree you don't even need to look at ("pruning" the tree) and
+what order to search the tree in (to maximize pruning).
+</p>
+
+<p>
+In the recent past, most of the better programs for this assignment
+haven't searched ahead at all.  In the given time limits, your time is
+generally better spent on a good board evaluator.
+</p>
+
+
+<p>
+A bit of an e-mail exchange between Ian and
+a the student whose program that placed 3rd in the initial tournament:
+</p><pre>| &gt;Interesting to note that about 6 of these 8 do *not* do
+| &gt;extensive minimax searching.
+| 
+| By the way... I added a minimax function to my code, which wasn't difficult
+| at all, but it extended my move time from an average of 18 seconds to 58
+| seconds on a 20x20 board.  I asked around some comp sci major upperclassmen,
+| and other than alpha beta pruning (which would shave off maybe 10 seconds or
+| so they said), they didn't have any other suggestions.
+| 
+Ah -- i'd been thinking the 20sec included minimax!
+(The winning program took about 1sec/move.)
+It's a bit of an art, but time-saving includes:
+- revisiting data structures and basic functions, to see
+  if you're doing unnecessary or re-computation;
+- including other heuristics, like only searching near
+  currently-placed pieces???  [very heuristic, in that
+  it's not guaranteed to be a lousy approach :-]
+- trim your static board valuation function to be very lean,
+  so that the search can go deep..
+stuff like that.
+Very open-ended -- which is why i left it as a project!
+</pre>
+<p></p>
+
+
+
+<p>
+<strong>Historical note:</strong>
+In the late 80's, Hitech (from Carnegie Mellon University) was generally
+the computer chess program to beat.  It was designed by a former
+world champion of postal chess, and his goal was to make the program
+as smart as possible, both in board evaluation and searching.
+A rival program, Deep Thought (also from CMU; the predecessor of Deep
+Blue from IBM) was started with an entirely different goal.
+Rather than being smart, Deep Thought was mainly <em>fast</em> so
+that it could look ahead more moves than any other program.
+As both programs improved, they traded top honors among all chess
+programs back and forth, with Deep Blue currently the clear winner.
+</p>
+
+
+
+
+
+
+
+
+</body></html>

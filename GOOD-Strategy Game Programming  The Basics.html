@@ -1,0 +1,306 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!-- saved from url=(0039)http://www.fierz.ch/strategy1.htm#trees -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Strategy Game Programming: The Basics</title>
+<meta name="GENERATOR" content="Arachnophilia 3.2">
+<meta name="FORMATTER" content="Arachnophilia 3.2">
+</head>
+
+<body bgcolor="#FFFFFF" text="#000000" topmargin="0" leftmargin="0">
+<table width="100%" border="0" bgcolor="#000000" cellspacing="0" cellpadding="20">	
+	<tbody><tr>
+		<td>
+			<font size="6" color="#BBBBBB" face="Ventura">
+			<b>Strategy Game Programming</b>
+			</font>
+		</td>
+		<td align="right">
+			<font size="6" color="#FF0000" face="Ventura">
+			<b>The Basics</b>
+			</font>	
+		</td>
+	</tr>
+</tbody></table>
+
+
+<table width="100%" border="0" bgcolor="#FFFFFF" cellpadding="20" cellspacing="0">
+		<tbody><tr>
+		<td>
+
+<ul>
+<li><a href="http://www.fierz.ch/strategy1.htm#internal">The internal representation</a> of the game position
+</li><li><a href="http://www.fierz.ch/strategy1.htm#generator">The move generator</a>
+</li><li><a href="http://www.fierz.ch/strategy1.htm#domove">Functions to execute and take back moves</a>
+</li><li><a href="http://www.fierz.ch/strategy1.htm#evaluation">The evaluation function</a>
+</li><li><a href="./GOOD-Strategy Game Programming  The Basics_files/GOOD-Strategy Game Programming  The Basics.html">Tree searching algorithms</a>: <a href="http://www.fierz.ch/strategy1.htm#minimax">MiniMax</a>, <a href="http://www.fierz.ch/strategy1.htm#negamax">NegaMax</a> and <a href="http://www.fierz.ch/strategy1.htm#alphabeta">AlphaBeta</a>
+</li></ul>
+
+<a name="internal"></a><h3>The Internal Representation</h3>
+Before we start with moves and search trees, we will need an internal representation of the position of
+our game. For the sake of simplicity, I will define a <code>struct position p</code> in such a way that
+all information about the position is included in it. An example for TicTacToe would be:
+<pre>typedef struct 
+	{
+	int board[3][3];
+	int color;
+	} TTTPOSITION;
+	
+	// use it like this:
+	TTTPOSITION p;	
+</pre>
+
+Here the board is represented by a 3x3 array which will contain the values WHITE or BLACK, and an
+int color which says which side will move next, again WHITE or BLACK, which are #defined somewhere.
+A more sophisticated example would be a chess program which has to take more things into account.
+<pre>typedef struct
+	{
+	int board[8][8];
+	int color;
+	boolean whitecancastleshort;
+	boolean whitecancastlelong;
+	boolean blackcancastleshort;
+	boolean blackcancastlelong;
+	int movestodraw;
+	} CHESSPOSITION;
+</pre>
+Here, the board and the color are again just integers. Additionally, in chess, we must remember if we can
+castle and how many moves are left until the 50-move-rule kicks in. Actually, this representation is not 
+complete yet. For instance, we cannot check if this position has occurred three times in the game, and
+en-passant captures are also not yet built in. <p>
+Anyway, I do not want to talk too much about game-specific things, but rather about general algorithms. So
+let's just assume that we have some kind of representation of the game we want to program. However, it is
+important to keep an open mind about the position representation. For instance in checkers one can do much
+better than using a 8x8-array. Checkers is played on 32 squares and therefore a position representation with
+32-bit words is interesting - use a 32-bit integer for black men, white men, black kings and white kings, respectively.
+You might ask: what's so good about this? The reason for doing it is simple: speed. With this kind of representation
+you can create much faster move generators than with an array. In a later part of this series, you can read how important
+speed is.
+<a name="generator"></a></p><h3>Move generation</h3>
+Next, we need to be able to generate all legal moves for a certain position. I will assume that I have a 
+function 
+<pre>int makemovelist(POSITION *p, MOVE list[MAXMOVES])</pre>
+This function generates all possible moves and stores them in the array <code>list</code>. It returns
+the number of legal moves, n. Note that the position is passed by reference rather than by value, although
+we won't need to change anything in the position at all - passing structures by reference is much faster
+than passing them by value, because only a single pointer needs to be passed instead of all the real position
+data. For some games, a movelist with a fixed number of moves is quite appropriate, e.g. for connect 4
+where you mostly have 7 possible moves. Sometimes, however, you might be wasting a lot of space with
+a fixed-size movelist - to avoid this problem, you can allocate a global <b>move stack</b> for your
+program. The move stack is just another array of moves, large enough to hold all movelists for the
+search path you are looking at. Hopefully this gets clearer in the search tree section below!
+
+<a name="domove"></a>
+<h3>DoMove and UndoMove</h3>
+Now that we can generate moves, we still need functions to do and undo moves. We use
+<pre>domove(MOVE *m, POSITION *p)</pre> to make a move m in the position p and 
+<pre>undomove(MOVE *m, POSITION *p)</pre> to undo the move again. Obviously, the struct move must
+contain all information necessary to support these two operations. As always, the structures are
+passed by reference, in this case it is not only a speed question: the position will be modified
+by these two functions.
+
+<a name="evaluation"></a><h3>The Evaluation Function</h3>
+The last thing we need before we can start tree search is an evaluation function. We are going to look a
+couple of moves ahead, and at the end of these moves we need to get an evaluation of the position. This
+will be 
+<pre>int evaluation(POSITION *p)</pre>
+The evaluation function will return positive values if the position is good for white and negative values if
+the position is bad for white in the MiniMax formulation.
+<br>
+Many things could be said about evaluation functions, for me, the two main objectives in designing an evaluation
+function are speed and accuracy. The faster your evaluation function is, the better, and the more
+accurate its evaluation is, the better. Obviously, these two things are somewhat at odds: an accurate evaluation
+function probably is slower than a 'quick-and-dirty' one. The evaluation function I'm talking about here is a 
+heuristic one - not an exact one. For games like checkers and chess, there are endgame databases, where
+positions with few pieces are listed as drawn, won or lost. This is obviously a completely accurate evaluation
+function! Normally, we deal with positions which we cannot evaluate correctly. For chess, an evaluation function
+would consist of a large term which describes the material balance, and many positional features, like doubled
+pawns, passed pawns, king safety, piece centralization and whatever else you might think of.  
+
+<a name="trees"></a><h3>Tree Searching</h3>
+The simplest way to search the game tree and also the most easy to understand is the
+<a name="minimax"></a>MiniMax algorithm. It searches all possible moves up to a fixed depth, evaluates all resulting positions and uses
+these evaluations to track the score down to the root of the search tree. Here it is:
+<pre>int minimax(POSITION  *p, int depth)
+	{
+	MOVE list[MAXMOVES];
+	int i,n,bestvalue,value;
+	
+	if(checkwin(p)) 
+		{
+		if (p-&gt;color == WHITE) 
+			return -INFINITY;
+		else 
+			return INFINITY;
+		}
+
+	if(depth == 0)	
+		return evaluation(p);
+
+	if(p-&gt;color==WHITE) 
+		bestvalue = -INFINITY;
+	else 
+		bestvalue = INFINITY;
+	
+	n = makemovelist(p,list);
+	if(n == 0) 
+		return handlenomove(p);
+	
+	for(i=0; i&lt;n; i++)
+		{
+		domove(&amp;list[i],p);
+		value = minimax(p,d-1);
+		undomove(&amp;list[i],p);
+		if(color == WHITE) 
+			bestvalue = max(value,bestvalue);
+		else 
+			bestvalue = min(value,bestvalue);
+		}
+  
+	return bestvalue;
+	}
+</pre>
+The idea here is that both players will try all possible moves in their position and then choose, respectively,
+the one which makes the value of the position as high as possible (the white side) or as low as possible (black). 
+I have called one color 'WHITE', this is the side which tries to maximize the value, and the other side tries to minimize the
+value. You can see that player 'WHITE' starts with a value of -INFINITY, and then goes on to try every move,
+and always maximizes the best value so far with the value of the current move. The other player, BLACK, will start out
+with +INFINITY and try to reduce this value. Note how I use a function <code>checkwin(p)</code> to detect a winning position
+<strong>during</strong> the tree search. If you only check winning conditions at the end of your variation, you can generate
+variations where both sides have won, for instance in connect 4 you could generate a variation where first one side connects four,
+and later the other side does. Also, note the use of <code>handlenomove(p)</code> - that's what you need
+to do when you have no legal move left. In checkers you will lose, in chess it's a draw.<p>
+If the (average) number of possible moves at each node is N,
+you see that you have to search N^D positions to search to depth D. N is called the branching factor. Typical
+branching factors are 40 for chess, 7 for connect 4, 10 for checkers and 300 for go. The larger the branching factor
+is, the less far you will be able to search with this technique. This is the main reason that a game like connect 4
+has been solved, that checkers programs are better than humans, chess programs are very strong already, 
+but go programs are still playing 
+very poorly - always when compared to humans.
+<a name="negamax"></a></p><h3>NegaMax</h3>
+The normal MiniMax code is a bit clumsy, since one side is trying to maximize the value and the other is trying
+to minimize - therefore, with MiniMax we always have to check if we are the side trying to maximize or
+the side trying to minimize. A neat way to get rid of this and to have a simpler function is <em>NegaMax</em>.  With
+the NegaMax algorithm both sides try to maximize all the time. NegaMax is identical to MiniMax, it's just
+a nicer formulation. Here's the basic NegaMax code:
+<pre>int negamax(POSITION *p, int depth)
+	{
+	MOVE list[MAXMOVES];
+	int i,n,value,bestvalue=-INFINITY;
+
+	if(checkwin(p)) 
+		return -INFINITY;
+	
+	if(depth == 0)	
+		return evaluation(p);
+	n = makemovelist(p,list);
+	if(n == 0) 
+		return handlenomove(p);
+	
+	for(i=0; i&lt;n; i++)
+		{
+		domove(&amp;list[i],p);
+		value = -negamax(p,depth-1);
+		undomove(&amp;list[i],p);
+		bestvalue = max(value,bestvalue);
+		}
+	return bestvalue;
+	}
+</pre>
+You can see that the NegaMax algorithm is shorter and simpler than the MiniMax algorithm. The point is
+that the call <code>value = -negamax(p,d-1);</code> takes care of the signs - or nearly. There is one further modification
+we must make for this code to work: The evaluation function must be sensitive to the side to move - for a position
+with white to move it must return its normal evaluation, for a position with black to move it must return -evaluation.
+<p> 
+At first sight, NegaMax is
+a bit harder to understand than MiniMax, but it's in fact much easier to use. The side to move is always
+trying to maximize the value. NegaMax is no better or worse than MiniMax - it's identical. It's just a better
+framework to use.
+<a name="alphabeta"></a></p><h3>AlphaBeta</h3>
+The major improvement over MiniMax/NegaMax is the AlphaBeta algorithm: Here you realize that you don't have
+to go through the whole search tree. If you find one winning continuation, you don't have to look at any others.
+Similarly, if you have found one continuation which will give you the value V you can stop your search along another
+continuation if you find only one possibility
+for your opponent which gives you a lower score than V. You don't have to look at all the other possibilities your opponent
+might have - one refutation is enough!
+Here is the code for AlphaBeta, extending the earlier NegaMax code: It receives two extra parameters, alpha and beta.
+They define an interval
+within which the evaluation has to be. If it isn't, the function will return. Your first call to AlphaBeta will be with an
+interval -INFINITY...INFINITY; subsequent recursive calls to the function will make the window smaller.
+<pre>int alphabeta(POSITION *p, int depth, int alpha, int beta)
+	{
+	MOVE list[MAXMOVES];
+	int i,n,value,localalpha=alpha,bestvalue=-INFINITY;
+	
+	if(checkwin(p)) 
+		return -INFINITY;
+
+	if(depth == 0)	
+		return evaluation(p);
+
+	n = makemovelist(p,list);
+	if(n == 0) 
+		return handlenomove(p);
+	
+	for(i=0; i&lt;n; i++)
+		{
+		domove(&amp;list[i],p);
+		value = -alphabeta(p,d-1,-beta,-localalpha);
+		undomove(&amp;list[i],p);
+		bestvalue = max(value,bestvalue);
+		<b>if(bestvalue&gt;=beta) 
+			break;
+		if(bestvalue&gt;localalpha) 
+			localalpha=bestvalue;</b>
+		}
+	return bestvalue;
+	}
+</pre>
+Note how AlphaBeta receives the parameters alpha and beta which tell it what range the value of the
+current position should lie. Once a move has returned with a higher value than alpha, this best value is
+saved in the variable localalpha and used for the next recursive call of AlphaBeta. If the best value is
+larger than beta, the search terminates immediately - we have found a move which refutes the notion that
+this position has a value in the range from alpha to beta, and do not need to look for another one. Note how
+my AlphaBeta function is returning the highest value it found, this can be higher than beta. Some people prefer
+to return beta instead of the best value on a fail high, that formulation of AlphaBeta is known as <b>fail-hard</b>.
+My formulation above is called <b>fail-soft</b>. The names come from the fact that in fail hard, the bounds
+alpha and beta are "hard", the return value cannot be outside the alpha-beta window. It would seem that fail-soft
+is much more sensible, as it might lead to more cutoffs: If you can return a higher value than beta (or a lower value
+than alpha), then perhaps you might get a cutoff in a previous instance of AlphBeta at a lower level in the search
+tree that you wouldn't get otherwise. However, the fail-hard camp says they get less search instabilities when
+using advanced techniques such as pruning. 
+<h3>Putting things together</h3>
+Now that we have all the basic building blocks for a 2-person strategy game program, we can put them all
+together. 
+
+There are two issues I have not addressed - the way my tree searching functions are written they just
+return the evaluation of the position, but no move. The other issue is: how deep shall we search? <p>
+I usually define a function <code>firstalphabeta</code> which is an exact copy of alphabeta, except that
+it also returns a best move. The second issue is resolved with something called 'iterative deepening': First
+we search 1 ply deep, then 2 ply, then 3, and so on. Once the user interrupts the search we return the best
+move of the last iteration. Of course this can also be automated by measuring the elapsed time and returning
+once this is larger than some specified value.</p><p>
+
+</p><p>
+Comments and questions are welcome!</p><hr color="#888888">
+<center>
+[ <a href="http://www.fierz.ch/">Author homepage</a> | 
+<a href="http://www.fierz.ch/strategy.htm">Introduction</a> | 
+<a href="http://www.fierz.ch/strategy1.htm">Part I</a> |
+<a href="http://www.fierz.ch/strategy2.htm">Part II</a> |
+<a href="http://www.fierz.ch/strategy3.htm">Part III</a> |
+<a href="http://www.fierz.ch/strategy4.htm">Part IV</a> |
+<a href="http://www.fierz.ch/strategy5.htm">Part V</a> ]
+
+<p>
+This page was last modified on May 5th, 2005 using <a href="http://www.arachnoid.com/"><img src="./GOOD-Strategy Game Programming  The Basics_files/arachno.gif" alt="arachnoid" align="middle" border="0"></a>
+</p></center>
+
+
+</td>
+</tr>
+</tbody></table>
+
+
+
+
+</body></html>

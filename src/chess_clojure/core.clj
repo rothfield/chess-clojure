@@ -2,6 +2,7 @@
   (:gen-class)
   (:require clojure.pprint) 
   (:use [clojure.test :only [is]])
+  (:use [clojure.set :only (union)])
   (:use [clojure.string :only (split-lines join)])
   (:use [clojure.pprint :only (pprint)])
   )
@@ -17,7 +18,7 @@
   (use 'chess_clojure.core :reload) (ns chess_clojure.core)
   (use 'clojure.stacktrace)
   (print-stack-trace *e)
-  (use 'doremi_script.test-helper :reload)  ;; to reload the grammar
+  (use 'chess-clojure.core :reload)  ;; to reload the grammar
   (print-stack-trace *e)
   (pst)
   )
@@ -60,7 +61,11 @@
   (get (:piece-locations position) location))
 
 (defn is-position?[x]
-  (= :position (:type x)))
+  (and
+    (= :position (:type x))
+    (:player-to-move x)
+    (:piece-locations x)
+    ))
 
 (defn is-color?[x]
   (get #{:white :black} x))
@@ -222,6 +227,9 @@
     ;; "  01234567"
     "\n\n"
     ))
+
+(defn display[x]
+  (println (position->string-san x)))
 ;; (println (position->string-san starting-position))
 (defn on-board?[loc] (not (off-board? loc)))
 
@@ -309,7 +317,11 @@
              }
     )) 
 
-
+(defn adjacent-king-locations[location]
+  (remove off-board?  
+          (map (fn[rule] (apply rule location))
+               king-rules)))
+;; (adjacent-king-locations [0 0])
 (defn non-ranging-moves[position location rules]
   ;;; includes captures
   (map (fn[loc2] [location loc2])
@@ -404,14 +416,15 @@
 
 
 (defn pawn-non-capturing-moves[position [x y :as location] ]
+
   (assert (is-pawn? (piece-at-location position location)))
   (when debug (println position location))
   (let [piece (piece-at-location position location)
         op (if (white-piece? piece)
              +
              -) 
-        on-second (if (white-piece? piece)
-                    (= y 2)
+        on-second (if (white-piece? piece) ;; (white-piece? :P)
+                    (= y 1)
                     (= y 6))
         ]
 
@@ -427,7 +440,13 @@
                 []
                 )))
     ))
+;;(println  (pawn-non-capturing-moves starting-position [0 1]))
+;; 
+;;
+;;(println (occupied? starting-position [0 3]))
 
+;;(println  (pawn-moves (assoc starting-position :player-to-move :black)  [0 1]))
+;; 
 (defn pawn-moves[position [x y :as location] ]
   (assert (is-pawn? (piece-at-location position location)))
 
@@ -479,7 +498,7 @@
 ;;; why??
 (def piece-letter #{"r" "R" "N" "n" "B" "b" "Q" "q" "K" "k" "P" "p"})
 
-(defn string->position-base[string color]
+(defn string->position[string color]
   {:post  [(is-position? %)]
    :pre [(string? string)
          (is-color? color)] }
@@ -489,6 +508,7 @@
     { :type :position
      :identifier "start"  ;;; Not unique! put move here!!! [[5 1] [5 3]]
      :castling-availability #{ :K :Q :k :q }
+     :status :active
      :player-to-move color
      :piece-locations
      (into (sorted-map) 
@@ -508,11 +528,13 @@
      }))
 
 (declare update-position)
-(defn string->position[string color]
+
+(defn string->position-and-update[string color]
   {:post  [(is-position? %)]
    :pre [(string? string)
          (is-color? color)] }
-  (update-position (string->position-base string color)))
+  (update-position (string->position string color)))
+
 ;;; (println (position->string (string->position "K k r R" :white)))
 (defn test-fen->position[]
   (let [fen-str "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
@@ -691,10 +713,15 @@
         )
     ))
 
-
+(defn append-to-path[position move]
+  (update-in position [:path] conj (move->san
+                                     move)))
+;; (println starting-position)
+;; (println (:path (play-move starting-position [[0 1][0 2]])))
 ;; make a child node
 (defn play-move[position move]
   (->     (make-move-aux position move)
+      (append-to-path move)
       flip-position
       update-position))
 
@@ -777,10 +804,46 @@
                (:player-to-move position))) 
           (:piece-locations position))
   )
+(defn friendly-pieces[position]
+  (filter (fn[[_ piece]]
+            (=   (piece-color piece)
+               (:player-to-move position))) 
+          (:piece-locations position))
+  )
 
-
+(defn locations-under-attack-by[position1 color]
+  "locations under enemy attack in the current position. Include all squares"
+  (when debug (println "Entering locations-under-attack, position is" 
+                       position1))
+  (let [position (assoc position1 :player-to-move color)]
+  (into (sorted-set)
+        (mapcat 
+          (fn[[loc piece]]  ;; destructure map entry
+            (let [
+                  piece-info (pieces-info piece)]
+              (cond (:ranging piece-info) ;; bqr
+                    (ranging-attack-locations position loc (:rules piece-info)) 
+                    (is-pawn? piece) ;; p
+                    (non-ranging-attack-locations 
+                      position
+                      loc 
+                      (get pawn-attack-rules (:player-to-move position)))
+                    true ;; bnk
+                    (non-ranging-attack-locations position loc (:rules piece-info)) 
+                    ))) 
+          (friendly-pieces position)
+          ))))
+;; (println (count (locations-under-attack-by after-e4 :white)))
+;; (println (count (locations-under-attack-by after-e4 :black)))
+;; (display after-e4)
+;; (println after-e4)
+;; (display after-e4)
+;;  (print-stack-trace *e)
+;; (println (ranging-moves after-e4 [5 0] bishop-rules))
+;; (println (non-ranging-attack-locations starting-position [0 1] white-pawn-attack-rules))
 
 (defn locations-under-attack[position]
+  "locations under enemy attack in the current position. Include all squares"
   (when debug (println "Entering locations-under-attack, position is" 
                        position))
   (into (sorted-set)
@@ -876,6 +939,57 @@
     (white-castling-moves position)
     (black-castling-moves position))) 
 
+
+
+;; (display after-e4)
+(declare position->string-san)
+;; (
+;; (println (count (map move->san (possible-moves starting-position :white))))
+;; (println (count (map move->san (possible-moves starting-position :black))))
+;; (println (count (map move->san (possible-moves after-e4 :white))))
+;; (println (count (map move->san (possible-moves after-e4 :black))))
+;; (display after-e4)
+;; (evaluation-function after-e4)
+;; ;;(mobility after-e4)
+;; ))
+;; (println (count (map move->san (possible-moves starting-position :black))))
+;
+(defn possible-moves[position1 color]
+  (let [position (assoc position1 :player-to-move color)]
+    "Given a position, disregarding legality, return possible moves for color"
+    (when debug
+      (println "entering possible moves")
+      (println "position is" (position->string-san position)
+               ))
+    (concat
+      (castling-moves position)
+      (mapcat ;; loop through pieces
+              (fn[[loc piece]]  ;; destructure map entry
+                (when debug (println "piece is" piece))
+                (let [
+                      piece-info (pieces-info piece)]
+                  (when debug
+                    (println "piece-info is" piece-info)
+                    (println "piece is" piece))
+                  (assert piece-info)
+                  ;; use case ???
+                  (cond (:ranging piece-info) ;; r,q, b
+                        (ranging-moves position loc (:rules piece-info)) 
+                        (is-pawn? piece) ;; p
+                        (pawn-moves position loc) 
+                        (is-knight? piece) ;; n 
+                        (non-ranging-moves position loc (:rules piece-info)) 
+                        (is-king? piece) ; k 
+                        (non-ranging-moves position loc (:rules piece-info)) 
+                        true
+                        (assert false)
+                        ))) 
+              (filter (fn[[_ piece]]
+                        (=   (piece-color piece)
+                           color)) 
+                      (:piece-locations position)))
+      )))                     
+
 (defn moves[position]
   (when debug
     (println "entering moves")
@@ -890,34 +1004,8 @@
                            true
                            false
                            ))
-            (concat
-              (castling-moves position)
-              (mapcat ;; loop through pieces
-                      (fn[[loc piece]]  ;; destructure map entry
-                        (when debug (println "piece is" piece))
-                        (let [
-                              piece-info (pieces-info piece)]
-                          (when debug
-                            (println "piece-info is" piece-info)
-                            (println "piece is" piece))
-                          (assert piece-info)
-                          ;; use case ???
-                          (cond (:ranging piece-info) ;; r,q, b
-                                (ranging-moves position loc (:rules piece-info)) 
-                                (is-pawn? piece) ;; p
-                                (pawn-moves position loc) 
-                                (is-knight? piece) ;; n 
-                                (non-ranging-moves position loc (:rules piece-info)) 
-                                (is-king? piece) ; k 
-                                (:king-moves position)
-                                true
-                                (assert false)
-                                ))) 
-                      (filter (fn[[_ piece]]
-                                (=   (piece-color piece)
-                                   (:player-to-move position))) 
-                              (:piece-locations position))
-                      )))))
+            (possible-moves position (:player-to-move position))
+            )))
 
 (defn checkmate?[position]
   ;; The player-to-move is checkmated!!!!!
@@ -961,8 +1049,34 @@
 (def empty-position-white
   (string->position "" :white))
 
+(def ez (string->position(str 
+        "k\n"
+        "n  p\n"
+        " p  P  K\n"
+        " P      \n"
+        "        \n"
+        "        \n"
+        "        \n"
+        "        \n"
+                           ) :white))
+(def ez-black (flip-position ez))
+;; (display ez)
+(def simple-str
+    (str
+                        "rk     \n"
+                        "p  pppp\n"
+                        "P      \n"
+                        "       \n"
+                        "       \n"
+                        "p      \n"
+                        "P PPPPP\n"
+                        "RK     \n"))
+(def simple-white (string->position simple-str :white))
+(def simple-black (string->position simple-str :black))
+;; (display simple-white)
 (def starting-position
   (string->position starting-position-string :white))
+(def after-e4 (play-move starting-position [[4 1][4 3]]))
 (def testpos2
   (string->position (str 
                       "PP   k\n"
@@ -993,22 +1107,7 @@
   (= 4 (count move)))
 
 
-(declare choose-move minimax)
-
-(defn old-choose-move[position]
-  ;; prefer castling for testing!!
-  (let [favorite-moves 
-        (filter #(if (looks-like-castling-move %) %)
-                (:moves position))] 
-    (or (when (not (empty? favorite-moves))
-          (rand-nth favorite-moves))
-        (some #(if (is-capture? position %) %) (:moves position))
-        (rand-nth (:moves position))
-        )))
-;; (choose-move starting-position 2)
-;; (choose-move (string->position-and-print "Rn k K" :white))
-;; (println (join (map name (:castling-availability starting-position)) ))
-;;  (->>  starting-position :castling-availability (map name)  join println))
+(declare minimax)
 
 (def char->num
   {\a 0 \b 1 \c 2 \d 3 \e 4 \f 5 \g 6 \h 7})
@@ -1055,14 +1154,13 @@
 (defn game-done?[position]
   (not (= :active (:status position)))
   )
-;; (println (choose-move starting-position))
 
 
 (defn clear-castling-availability[position]
   (assoc position :castling-availability #{}))
 
 
-(declare minimax-aux)
+(declare minimax)
 
 (defn alpha-num[x]
   (get {"a" 0 "b" 1 "c" 2 "d" 3 "e" 4 "f" 5 "g" 6 "h" 7} x))
@@ -1094,11 +1192,38 @@
 (def minimax-depth 1)
 
 (defn do-game-done[position]
-    (println "Game is done: " (:status position) "!!"))
+  (println "Game is done: " (:status position) "!!"))
 
-;;                (println (:best-move (minimax-aux starting-position 2 true)))
+;;                (println (:best-move (minimax starting-position 2 true)))
 
 ;;
+(defn is-coordinate?[x]
+  (and (number? x)
+       (> x -1)
+       (< x 8)))
+
+(defn is-location?[ loc ]
+  (and (seq? loc)
+       (every? is-coordinate? loc)))
+
+(defn is-move?[move]
+  (let [ [ loc1 loc2] move]
+    (every? is-location? [loc1 loc2])
+    )
+  )
+(defn test-is-move[]
+  (is (= true
+         (is-move? [  [ 0 0 ] [ 0 2]])))
+  (is (= true
+         (is-move? "e2e4")))
+
+  )
+(defn emit-xboard-move[move]
+  {
+   :pre [(is-move? move)]
+   }
+  (println "move " (move->san move)) 
+  )
 
 (defn xboard-server[]
   ;;; knights on Linux seems to work well!
@@ -1109,9 +1234,9 @@
          status :not-in-game
          ]
 
- ;;   (println "line is " line)
-  ;;  (println "status: " status )
-   ;; (println (:piece-locations position))
+    ;;   (println "line is " line)
+    ;;  (println "status: " status )
+    ;; (println (:piece-locations position))
     ;;    (Thread/sleep 500)
     (cond (contains? #{"protover 2" "nopost" "hard" "st 20"}
                      line) 
@@ -1133,8 +1258,8 @@
                    status)
             (= "." line) ;; leave edit
             (do
-             ;; (println "leaving edit************")
-             ;; (println position)
+              ;; (println "leaving edit************")
+              ;; (println position)
               (recur (read-line) position :in-game))
             (= "#" line) ;; clear board
             (recur (read-line) { :type :position
@@ -1168,9 +1293,8 @@
           (let [
                 ;;  _ (println "handling go,, position is ")
                 ;; _ (pprint  position) 
-                minimax-result  (minimax-aux position minimax-depth true)
-                move 
-                (:best-move  minimax-result)
+                minimax-result  (minimax position minimax-depth true)
+                move (:best-move  minimax-result)
                 ;; _ (pprint minimax-result)
                 ]
             (println "move " (move->san move))
@@ -1192,29 +1316,30 @@
                 ;;    _ (println "game-done? is " (game-done? new-position))
                 ;;   _ (println "after play-move, new-position is")
                 ;;  _ (pprint new-position)
+                minimax-result  (when (not (game-done? new-position))
+                                  (minimax position minimax-depth true))
                 my-move (when (not (game-done? new-position))
-                          (choose-move new-position minimax-depth)) 
-                ;; _ (println "my-move is " my-move)
+                          (:best-move  minimax-result))
                 new-position2 (when (not (game-done? new-position))
-                                  (play-move new-position my-move))
+                                (play-move new-position my-move))
                 ] 
-              (if (game-done? new-position)
-                (do
-                 (do-game-done new-position)
-                    (recur (read-line) new-position status))
-                ;; else
-                (do 
-                    (println "move " (move->san my-move))  ;; emit my move
-                    (if (game-done? new-position2)
-                        (do-game-done new-position2))
-                    (recur (read-line) new-position2 status))))
+            (if (game-done? new-position)
+              (do
+                (do-game-done new-position)
+                (recur (read-line) new-position status))
+              ;; else
+              (do 
+                (emit-xboard-move my-move)   
+                (if (game-done? new-position2)
+                  (do-game-done new-position2))
+                (recur (read-line) new-position2 status))))
           true
           (recur (read-line) position status))
 
 ))
 
 
-
+(declare choose-move)
 ;;(testz2)
 ;;  (use 'clojure.stacktrace)
 ;; (print-stack-trace *e)
@@ -1227,28 +1352,178 @@
                                 :k 0  :K 0   :P 1 :N 3 :B 3 :Q 9 :R 5})
 (def blacks-piece-value-lookup {:k 0 :K 0 :p 1 :n 3 :b 3 :q 9 :r 5 
                                 :P -1 :N -3 :B -3 :Q -9 :R -5})
-(defn evaluate-position[position]
+
+
+(defn opponent-moves[position]
+  "In a position, all possible opponent moves"
+  )
+
+(def position starting-position)
+(def color-num {:white 1 :black -1})
+
+(defn control-of-center[position]
+locations-under-attack
+
+  )
+(def MOBILITY-WEIGHT 0.01)
+;; (println (mobility after-e4))
+(defn mobility[position]
+  "Mobility factor from the point of view of CURRENT PLAYER. Higher is better"
+  (let [
+        ary (if (white-to-move? position) [:white :black] [:black :white])
+        ]
+        (* MOBILITY-WEIGHT
+     (apply - (map (fn[x] (count (locations-under-attack-by position x)))  ary)))))
+
+(def white-pieces #{:K :Q :B :N :R :P})
+(def black-pieces #{:k :q :b :n :r :p})
+
+(defn in-checkmate?[position]
+  (let [color (:player-to-move position)
+        king-piece (if (= color :white) :K :k)
+        king-location (some  #(when (= (second %) king-piece) (first %))
+                            (:piece-locations position))
+        king-squares (adjacent-king-locations king-location)
+        ]
+    ;; king is checkmated if all adjacent non-friendly squares plus the king's square
+    ;; are under enemy attack
+    (empty? (clojure.set/difference
+              (set (conj (remove (partial friendly-square? position) king-squares) 
+                         king-location))
+              (locations-under-attack position)))
+    ))
+(comment
+  (println (in-checkmate? white-in-mate))
+  (println (in-checkmate? black-in-mate))
+  (println (in-checkmate? starting-position))
+  (do (println (position->string black-in-mate))
+      (println (locations-under-attack black-in-mate))
+      (println (in-checkmate? black-in-mate))
+      )
+  )
+(def white-in-mate-str (str
+                         "        \n"
+                         "        \n"
+                         "        \n"
+                         "k       \n"
+                         "        \n"
+                         "  p     \n"
+                         "Pn      \n"
+                         "K r     \n"))
+
+
+
+(def white-in-mate (string->position white-in-mate-str :white))
+
+(def black-in-mate-str (str
+                         "k R     \n"
+                         "pp      \n"
+                         "        \n"
+                         "K       \n"
+                         "        \n"
+                         "        \n"
+                         "        \n"
+                         "        \n"))
+(def black-in-mate (string->position black-in-mate-str :black))
+
+(def win-str (str 
+               "k r     \n"
+               "nn       \n"
+               "         \n"
+               "         \n"
+               "        \n" 
+               "        \n"
+               "NN      \n"
+               "K R"
+               ))
+
+
+(def infinity 10000)
+
+
+(defn evaluation-function[position]
   {
    :pre [(is-position? position)]
    :post  [(number? %)]
    }
+  "Return positive values if position is good for white and negative if position is bad for white"
   (when false
-    (println "evaluate-position, status is " (:status position)))
-  (cond (checkmate? position)
-        -10000
+    (println "evaluation-function, status is " (:status position)))
+  (cond 
+       ;; TODO
+       ;; (in-checkmate? position) 
+       ;; (if (white-to-move? position)
+       ;; (- infinity) 
+        ;;  infinity)
+        (empty? (moves position))
+        0
         (not (= :active (:status position))) 
         0
         true
-        (let [tbl (if (white-to-move? position) whites-piece-value-lookup
-                    blacks-piece-value-lookup)]
-          (+ (/ (count (:moves position)) 100.0)  ;; my moves mobility
+        (let [tbl whites-piece-value-lookup]
+          (+  0 ;; (mobility position)
+             (apply + (map #(get tbl %) 
+                           (map second (:piece-locations position))))))))
 
-          (apply + (map #(get tbl %) 
-                        (map second (:piece-locations position))))))))
+(def white-ahead-in-material (string->position "QK  nk" :white))
+(def white-behind-in-material (string->position "KN  kq" :white))
+(def black-ahead-in-material (string->position "KN  kq" :black))
+(def black-behind-in-material (string->position "QK  nk" :black))
 
-;;(println (evaluate-position starting-position))
+(defn test-evaluation-for-negamax[]
+  (is (=  (- infinity)
+         (evaluation-function white-in-mate)
+        ))
+  (is (=  infinity
+         (evaluation-function black-in-mate)
+        ))
+  (is (>=  (evaluation-function white-ahead-in-material)
+        3 ))
+  (is (<= (evaluation-function white-behind-in-material)
+        -3))
+  (is (>=  (evaluation-function black-ahead-in-material)
+        -3 ))
+  (is (<= (evaluation-function black-behind-in-material)
+        3))
+)
+;; (test-evaluation-for-negamax)
+ ;; (println (in-checkmate? black-in-mate))
+;; (display white-ahead-in-material)
+;; (display black-ahead-in-material)
+;;(println (evaluation-function white-in-mate))
+;;(println (evaluation-function white-behind-in-material))
+;;(println (evaluation-function white-ahead-in-material))
+;; (println white-ahead-in-material)
+;; (println (map mobility (generate-moves starting-position)))
 ;; (println (/ (count (:moves starting-position))  100.0))
 
+;;; TESTING
+(def black-mates-in-1 (string->position win-str :black))
+;; (println black-wins)
+(def white-mates-in-1 (string->position win-str :white))
+
+
+(def white-queens-eventually-in-5
+  (string->position 
+    (str "  K    k\n"
+         "       p\n"
+         "       p\n"
+         "       p\n"
+         "        \n"
+         "        \n"
+         "P      P\n"
+         "        "
+         )
+    :white))
+
+;; (println (position->string-san white-queens-eventually-in-5))
+;;
+;; (test-evaluation-function-for-black-in-checkmate)
+;; (println (position->string-san black-wins))
+; (println (in-checkmate? pos2 :black))
+;; (println (mobility starting-position))
+;; (apply - [20 20])
+;
 
 ;; (println (evalu
 (defn play-game[]
@@ -1404,16 +1679,17 @@
 (def MINIMAX-DEPTH 4)
 
 (defn terminal-node?[position]
-  (game-done? position)
-  )
+  (or (game-done? position)
+      (empty? (moves position))
+  ))
 
 
 (defn heuristic-value-of-node[node]
 
-  (evaluate-position node)
+  (evaluation-function node)
   )
 ;; (println (choose-move starting-position))
-(declare minimax-aux)
+(declare minimax)
 (defn is-san?[x]
   ;; TODO
   true
@@ -1423,8 +1699,8 @@
 ;; (choose-move starting-position 2) 
 (defn choose-move[position depth]
   ;; returns best move !!!
-  (let [z (minimax-aux position depth true)]
-    (pprint z)
+  (let [z (minimax position depth true)]
+    ;; (pprint z)
     (:best-move  z)
     ;; (last (sort-by :value (:children z)))
     ))
@@ -1441,13 +1717,28 @@
   (or (= -1  depth)
       (not (= :active (:status node)))))
 ;;(testz2)
-(defn minimax-aux[position minimax-depth my-maximizing-player]
-  (when false
-    (println "entering minimax-aux")
-    (println (position->string-san position))
-    (println "leaf-node? " (leaf-node? position minimax-depth))
-    )
-  (loop [node position
+
+(defn minimax[my-node minimax-depth my-maximizing-player]
+  ;; Returns tree
+  ;; Something like this
+  ;;        start-node
+  ;;            |
+  ;;            | children
+  ;;            |
+  ;;  ----------------------------
+  ;;  |                         |
+  ;;  |                         |
+  ;;  |                         id: d4d5
+  ;;  id:   e4e5                move: [[3,3] [3 4]]
+  ;;  move: [4,3] [4,4]         value: 1.02
+  ;;  value: 1.1
+  ;;       |
+  ;;       |
+  ;;   ------------------
+  ;;   |
+  ;;   |
+  ;;   e6e5
+  (loop [node my-node
          depth minimax-depth
          maximizing-player my-maximizing-player]
     (if (leaf-node? node depth)
@@ -1458,7 +1749,7 @@
                  (* -1 (heuristic-value-of-node node)))
        }
       (let [children (map 
-                       (fn[my-move] (minimax-aux 
+                       (fn[my-move] (minimax 
                                       (play-move node my-move)
                                       (dec depth)
                                       (not maximizing-player)))
@@ -1468,31 +1759,16 @@
                          (last sorted-children)
                          (first sorted-children))
             ]
-        ;;(println "best-child " best-child)
-        (assert (not (nil? children)))
-        (when false 
-          (println "depth is" depth)
-          (println "count children" (count children))
-          (println "depth:"  depth)
-          (println (position->string-san node))
-          (println (:identifier node))
-          (println "children:")
-          (pprint children) 
-          )
-
-        { :identifier (:identifier node)
+        {:identifier (:identifier node)
          :move (:move node)
          :children children
-
          :value  (:value best-child)
          :best-move (:move best-child)
-         ;; (apply (get {true max false min} maximizing-player)
-         ;;              (map :value children))
          }
         ))))
 
-(defn minimax[position]
-  (minimax-aux position 4 true))
+(defn zminimax[position]
+  (minimax position 4 true))
 (def scratch-position2
   (string->position (str 
                       "p \n"
@@ -1501,11 +1777,11 @@
                       "K      \n"
                       ) :black)
   )
-(comment  ;;   (println (:value (minimax-aux scratch-position2 2 true)))
+(comment  ;;   (println (:value (minimax scratch-position2 2 true)))
          (do
            (println (position->string-san scratch-position2))
            (println
-             (map (fn[depth] (move->san (:best-move (minimax-aux scratch-position2 depth true))))
+             (map (fn[depth] (move->san (:best-move (minimax scratch-position2 depth true))))
                   [1 2 3 4]))
            )
          )
@@ -1526,20 +1802,20 @@
 (defn test-z[]
   (do
     (println (position->string-san scratch-position))
-    ;;   (println (:value (minimax-aux scratch-position 4 true)))
+    ;;   (println (:value (minimax scratch-position 4 true)))
     (println
-      (map (fn[depth] (:best-move (minimax-aux scratch-position depth true)))
+      (map (fn[depth] (:best-move (minimax scratch-position depth true)))
            [1 2 3 4 5])
-      ;;(pprint (minimax-aux scratch-position 3 true))
+      ;;(pprint (minimax scratch-position 3 true))
       ))) 
 
 (defn test-minimax[]
   (let [position scratch-position]
-    (pprint (minimax-aux position 1 true))
+    (pprint (minimax position 1 true))
     (is (neg? 
-          (:value (minimax-aux scratch-position 1 true))))
+          (:value (minimax scratch-position 1 true))))
     (is (neg? 
-          (:value (minimax-aux scratch-position 2 true))))
+          (:value (minimax scratch-position 2 true))))
 
     ))
 ;; (test-minimax)
@@ -1571,53 +1847,315 @@
 
 
 ;;(println (sample1))
-;; (println (:best-move (minimax-aux (sample1) 4 true)))
-;; (pprint (minimax-aux (sample1) 4 true))
+;; (println (:best-move (minimax (sample1) 4 true)))
+;; (pprint (minimax (sample1) 4 true))
 (defn sample1[]
-(string->position-and-print (str " \n"
-                    "        \n"
-                    "        \n"
-                    "        \n"
-                    "       p\n"
-                    "Q      r\n"
-                    "     PPk\n"
-                    "P      p\n"
-                    "       K\n") :black))
+  (string->position-and-print (str " \n"
+                                   "        \n"
+                                   "        \n"
+                                   "        \n"
+                                   "       p\n"
+                                   "Q      r\n"
+                                   "     PPk\n"
+                                   "P      p\n"
+                                   "       K\n") :black))
 (comment
-(let [result (minimax-aux (sample1) 2 true)]
-;;  (pprint result)
- (println(:best-move result))
- (println (:value result))
-  (pprint result)
+  (let [result (minimax (sample1) 2 true)]
+    ;;  (pprint result)
+    (println(:best-move result))
+    (println (:value result))
+    (pprint result)
+    )
   )
-  )
-  ;;(println (:best-move (minimax-aux (sample1) 4 true)))
-  ;;(pprint (:best-move (minimax-aux starting-position 1 true)))
+;;(println (:best-move (minimax (sample1) 4 true)))
+;;(pprint (:best-move (minimax starting-position 1 true)))
 
 ;;{:status :active,
 
 
 (defn testz2[]
-  (pprint (:best-move (minimax-aux {:status :active,
-                                    :identifier "a2a3",
-                                    :moves
-                                    '([[7 2] [6 2]]
-                                      [[7 2] [6 3]]
-                                      [[7 2] [7 3]]
-                                      [[7 4] [5 3]]
-                                      [[7 4] [5 5]]
-                                      [[7 4] [6 2]]
-                                      [[7 4] [6 6]]),
-                                    :king-moves '([[7 2] [6 3]] [[7 2] [6 2]] [[7 2] [7 3]]),
-                                    :in-check false,
-                                    :piece-locations {[0 2] :P, [7 0] :K, [7 1] :p, [7 2] :k, [7 4] :n},
-                                    :locations-under-attack #{[1 3] [6 0] [6 1] [7 1]},
-                                    :move [[0 1] [0 2]],
-                                    :type :position,
-                                    :player-to-move :black,
-                                    :algebraic-moves
-                                    '("kh3g3" "kh3g4" "kh3h4" "nh5f4" "nh5f6" "nh5g3" "nh5g7")}
-                                   1 
-                                   true
-                                   ))))
+  (pprint (:best-move (minimax {:status :active,
+                                :identifier "a2a3",
+                                :moves
+                                '([[7 2] [6 2]]
+                                  [[7 2] [6 3]]
+                                  [[7 2] [7 3]]
+                                  [[7 4] [5 3]]
+                                  [[7 4] [5 5]]
+                                  [[7 4] [6 2]]
+                                  [[7 4] [6 6]]),
+                                :king-moves '([[7 2] [6 3]] [[7 2] [6 2]] [[7 2] [7 3]]),
+                                :in-check false,
+                                :piece-locations {[0 2] :P, [7 0] :K, [7 1] :p, [7 2] :k, [7 4] :n},
+                                :locations-under-attack #{[1 3] [6 0] [6 1] [7 1]},
+                                :move [[0 1] [0 2]],
+                                :type :position,
+                                :player-to-move :black,
+                                :algebraic-moves
+                                '("kh3g3" "kh3g4" "kh3h4" "nh5f4" "nh5f6" "nh5g3" "nh5g7")}
+                               1 
+                               true
+                               ))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; TRY NEGAMAX http://en.wikipedia.org/wiki/Negamax#NegaMax_with_Alpha_Beta_Pruning
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+(defn generate-moves[node]
+  (let [moves (moves node)]
+    (map (partial play-move node) moves)
+    ))
+
+;; (pprint (first (generate-moves starting-position)))
+;; (play-move starting-position (first (moves starting-position)))
+;; (pprint (map evaluation-function (generate-moves starting-position)))
+;;
+(defn order-moves[nodes]
+  nodes
+  )
+
+(defn terminal?[node]
+  (in-checkmate? node))
+
+
+(defn heuristic-value[node]
+  (evaluation-function node) 
+  )
+
+"
+function negamax(node, α, β, player)
+if node is a terminal node
+return color * the heuristic value of node
+else
+foreach child of node
+val := -negamax(child, -player, -β, -α)
+if val ≥ β
+return val
+if val > α
+α := val
+return α
+"
+(comment
+  (println (terminal? black-mates-in-1))
+  (display white-mates-in-1)
+  (negamax white-mates-in-1 1 (- infinity) infinity 3)
+  (println (in-checkmate? black-mates-in-1))
+  (println black-mates-in-1)
+  (println (position->string black-mates-in-1))
+  (display white-queens-eventually-in-5)
+  (negamax  (string->position "PP  K  P b k" :white) 1)
+  (negamax white-queens-eventually-in-5 2)
+  (negamax starting-position)
+  (moves black-mates-in-1)
+  )
+
+
+(def DEFAULT-NEGAMAX-DEPTH 2)
+(defn negamax
+  
+  ([node]
+   (negamax node DEFAULT-NEGAMAX-DEPTH (- infinity) infinity 1))
+
+  ([node depth]
+   (negamax node depth (- infinity) infinity 1))
+
+  ([node depth my-alpha my-beta color]
+   (when false
+   (println "Entering negamax")
+   (println "player to move: " (:player-to-move node))
+   (display node)
+     )
+   ;; color is zero or 1
+   (if (or (zero? depth)  (terminal? node))
+             { :path (:path node) 
+              :value (* color (evaluation-function 
+                                node))
+              } 
+     ;; else
+         (loop [best-negamax-result  {:path [] ;; (:path node)
+                                      :value  (- infinity)
+                                      }
+                my-moves (moves node) ;; generate-moves order-moves)
+                alpha my-alpha
+                ]
+           (when true
+             (println "Examining: " (move->san (first my-moves))))
+           (when debug
+             (println "my-moves: ")
+             (pprint (map move->san my-moves))
+             )
+           (if (empty? my-moves)
+             best-negamax-result
+             (let [
+                   child (play-move node (first my-moves))
+                   _ (when debug (println "child is")
+                       (pprint child))
+                   zz-negamax-result (negamax child (dec depth) (- my-beta) (- alpha) (- color)) 
+                   ;; val := - negamax(child...). Update the map. 
+                   negamax-result (update-in zz-negamax-result [:value] -)
+                   value (:value negamax-result) 
+                   _ (when true (println "negamax-result is" negamax-result))
+                   new-best-value (apply max-key :value [negamax-result best-negamax-result])
+                   ;; new-best-value (max ( value)  ;; bestValue := max( bestValue, val )
+                   new-alpha (max alpha value)  ;; max( α, val )
+                   ]
+               (if (>= new-alpha my-beta)
+                 (do (println "new-alpha is >= my-beta " new-alpha my-beta)
+                 new-best-value
+                     )
+                 (recur new-best-value
+                        (rest my-moves)
+                        new-alpha
+                        ))
+               ))))))
+;; (pprint (test-negamax starting-position 2))
+(comment
+  "
+  The pseudocode for depth-limited negamax search with alpha-beta pruning follows:[1]
+  function negamax(node, depth, α, β, color)
+  if depth = 0 or node is a terminal node
+  return color * the heuristic value of node
+  bestValue := -∞
+  childNodes := GenerateMoves(node)
+  childNodes := OrderMoves(childNodes)
+  foreach child in childNodes
+  val := -negamax(child, depth - 1, -β, -α, -color)
+  bestValue := max( bestValue, val )
+  α := max( α, val )
+  if α ≥ β
+  break
+  return bestValue
+
+  Initial call for Player A's root node
+  rootNegamaxValue := negamax( rootNode, depth, -∞, +∞, 1)
+
+  ")
+(comment
+  (map evaluation-function (generate-moves starting-position))
+  (use 'clojure.stacktrace)
+  (print-stack-trace *e)
+  (println (- infinity))
+  (pprint (test-negamax starting-position 2))
+  )
+;;;  Initial call for Player A's root node
+;;; rootNegamaxValue := negamax( rootNode, depth, -∞, +∞, 1)
+(defn test-negamax[root-node depth]
+  (let [  root-negamax-value (negamax root-node  depth, (- infinity), infinity, 1)]
+    root-negamax-value
+    ))
+
+(defn test-evaluation-function-for-black-in-checkmate-is-negative-infinity[]
+  (is (= (- infinity)
+         (evaluation-function white-in-mate))
+      ))
+
+(defn test-evaluation-function-for-white-in-checkmate-is-negative-infinity[]
+  (is (= (- infinity)
+         (evaluation-function white-in-mate))
+      ))
+
+  ;;(use 'clojure.stacktrace)
+ ;; (print-stack-trace *e)
+;; (display white-ahead-in-material)
+;; (println (evaluation-function starting-position))
+;; 
+(defn minimax2
+;;(println (minimax2 white-ahead-in-material 1 true (- infinity) infinity))
+  ([state]
+  (minimax2 state 1 true (- infinity) infinity))
+
+  ([state depth]
+  (minimax2 state depth true (- infinity) infinity))
+  
+  ([state depth my-turn? alpha beta]
+
+   (if (zero? depth)
+       (evaluation-function state)
+    
+     (cond my-turn? ;; maximizing
+             (loop [moves (moves state)
+                   alpha (- infinity)
+                    best-move nil
+                    ]
+           (println "my-turn? case")
+               (println "best-move: " best-move)
+               (if (empty? moves)
+                 alpha
+               (let [move (first moves)
+                     _ (println (move->san move))
+                     s (play-move state move) ;; 
+                  ;; alpha = (maximum alpha (Minimax s (sub1 depth) (not my-turn?) alpha beta))
+                     result (minimax2 s (dec depth)
+                                                (not my-turn?)
+                                                alpha
+                                                beta)
+                     _ (println "result is " result)
+                     new-alpha (max alpha  result)
+                     _ (println "new-alpha is " new-alpha)
+                     ]
+                 (if (> new-alpha beta)
+                   new-alpha
+                (recur (rest moves) 
+                       new-alpha
+                       (if (> result alpha)
+                         (move->san move) 
+                       best-move)
+                       )))))
+     (not my-turn?)
+             (loop [moves (moves state)
+                   beta  infinity
+                    best-move nil
+                    ]
+           (println "not my-turn? case")
+               (if (empty? moves)
+                 beta
+               (let [move (first moves)
+                     _ (println (move->san move))
+                     s (play-move state move)
+                     result (minimax2 s (dec depth)
+                                                (not my-turn?)
+                                                alpha
+                                                beta)
+                     _ (println "result is " result)
+
+                     new-beta (min beta result)
+                     _ (println "new-beta is " new-beta)
+                     ]
+                 (if (< new-beta alpha)
+                   new-beta
+                (recur (rest moves) 
+                       new-beta
+                       (if (< result beta)
+                         (move->san move) 
+                       best-move)
+                       )))))
+           ))))
+
+(do
+  ;; (display ez)
+;;(println (minimax2 white-ahead-in-material 1 true (- infinity) infinity))
+;;  (display white-ahead-in-material)
+)
+
+"
+Minimax(state, depth, my-turn?, alpha, beta)
+if (Lookahead-Limit-Reached? depth) then return (static-board-evaluation state)
+Otherwise
+if my-turn? (maximizing):
+  alpha = -infinity 
+  for each s in {Successors state) 
+    alpha = (maximum alpha (Minimax s (sub1 depth) (not my-turn?) alpha beta))
+    if (> alpha beta) return alpha  
+  end
+  return alpha
+if not my-turn? (minimizing):
+  beta = +infinity  
+  for each s in {Successors state) 
+    beta = (minimum beta (Minimax s (sub1 depth) (not my-turn?) alpha beta))
+    if (< beta alpha) return beta 
+  end
+  return beta
+"
+
+
 
