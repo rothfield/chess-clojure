@@ -1,0 +1,132 @@
+
+#|-----------------------------------------------------------------------------
+Artificial Intelligence, Second Edition
+Elaine Rich and Kevin Knight
+McGraw Hill, 1991
+
+This code may be freely copied and used for educational or research purposes.
+All software written by Kevin Knight.
+Comments, bugs, improvements to knight@cs.cmu.edu
+----------------------------------------------------------------------------|#
+
+#|----------------------------------------------------------------------------
+		             MINIMAX SEARCH
+			    "minimax.lisp"
+----------------------------------------------------------------------------|#
+
+#|-----------------------------------------------------------------------------
+
+ Minimax game playing.
+
+ This file contains functions for doing game-playing search.  This 
+ program will play any game for which the following functions and
+ variables are defined:
+
+	(print-board b)
+	(movegen pos player)
+	(opposite player)
+	(static pos player)
+	(won? pos player)
+	(drawn? pos)
+	(deep-enough pos depth)
+	(make-move pos player move)
+	*start*
+
+ These functions are implemented for tic-tac-toe in the file 
+ "tictactoe.lisp".
+
+----------------------------------------------------------------------------|#
+
+
+;; Function MINIMAX performs minimax search from a given position (pos), 
+;; to a given search ply (depth), for a given player (player).  It returns
+;; a list of board positions representing what it sees as the best moves for 
+;; both players.  The first element of the list is the value of the board 
+;; position after the proposed move.
+
+(defun make-str (a b) (list a b))
+
+(defun value (str) (car str))
+
+(defun path (str) (cadr str))
+
+(defun next-move (str) (car (path str)))
+
+
+(defun minimax (pos depth player)
+  (cond ((deep-enough pos depth)
+	 (make-str (static pos player) nil))
+	(t
+	 (let ((successors (movegen pos player))
+	       (best-score -99999)
+	       (best-path nil))
+	   (cond ((null successors) (make-str (static pos player) nil))
+		 (t
+		  (do ((s successors (cdr s)))
+		      ((null s))
+		    (let* ((succ (car s))
+			   (result-succ (minimax succ (1+ depth) 
+					(opposite player)))
+			   (new-value (- (value result-succ))))
+		      (when (> new-value best-score)
+			(setq best-score new-value)
+			(setq best-path (cons succ (path result-succ))))))
+		  (make-str best-score best-path)))))))
+
+
+;; Function MINIMAX-A-B performs minimax search with alpha-beta pruning. 
+;; It is far more efficient than MINIMAX.
+
+(defun minimax-a-b (pos depth player)
+  (minimax-a-b-1 pos depth player 99999 -99999))
+
+(defun minimax-a-b-1 (pos depth player use-thresh pass-thresh)
+  (cond ((deep-enough pos depth)
+	 (make-str (static pos player) nil))
+	(t 
+	 (let ((successors (movegen pos player))
+	       (best-path nil))
+	   (cond ((null successors) (make-str (static pos player) nil))
+		 (t
+		  (do ((s successors (cdr s)) (quit nil))
+		      ((or quit (null s)))
+		    (let* ((succ (car s))
+			   (result-succ (minimax-a-b-1 succ (1+ depth)
+						       (opposite player)
+						       (- pass-thresh)
+						       (- use-thresh)))
+			   (new-value (- (value result-succ))))
+		      (when (> new-value pass-thresh)
+			(setq pass-thresh new-value)
+			(setq best-path (cons succ (path result-succ))))
+		      (when (>= pass-thresh use-thresh) (setq quit t))))
+		  (make-str pass-thresh best-path)))))))
+
+
+;; Function PLAY allows you to play a game against the computer.  Call (play) 
+;; if you want to move first, or (play t) to let the computer move first.
+
+(defun play (&optional machine-first?)
+  (let ((b *start*))
+    (when machine-first? 
+      (let ((m1 (minimax-a-b b 0 'o)))
+        (setq b (next-move m1))))
+    (do ()
+	((or (won? b 'x) (won? b 'o) (drawn? b))
+	 (format t "Final position: ~%")
+	 (print-board b)
+	 (when (won? b 'o) (format t "I win.~%"))
+	 (when (won? b 'x) (format t "You win.~%"))
+	 (when (drawn? b)  (format t "Drawn.~%")))
+      (print-board b)
+      (format t "Your move: ")
+      (let ((m (- (read) 1)))
+	(setq b (make-move b 'x m))
+	(when (not (drawn? b))
+	  (print-board b)
+	  (let ((m1 (minimax-a-b b 0 'o)))
+	    (setq b (next-move m1))
+	    (if (and (not (drawn? b))
+		     (not (won? b 'o))) 
+		(format t "My move: ~%"))))))))
+
