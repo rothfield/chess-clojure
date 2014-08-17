@@ -249,8 +249,8 @@
 ;;
 ;;(def fen-str "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 ;; (println (position->string (fen->position fen-str)))
-(defn fen->position[x]
-  (let [ [ fen-str player-to-move castling-state ] (clojure.string/split x #" ")]
+(defn fen->position[^String x]
+  (let [ [^String fen-str player-to-move castling-state ] (clojure.string/split x #" ")]
     ;; x is a fen string
     (string->position  (-> fen-str  (.replaceAll "/" "\n")
                            (.replaceAll "8" "        ")
@@ -460,7 +460,7 @@
        (piece-at-location position location)))
 
 (defn ranging-moves[position location rules]
-  (assert (is-ranging? (piece-at-location position location)))
+ ;; (assert (is-ranging? (piece-at-location position location)))
   ;; (assert (is-position? position))
   (assert (valid-location? location))
   (remove empty?
@@ -639,7 +639,7 @@
         locs (:piece-locations position)
 
         piece (piece-at-location position (first move)) 
-        my-diff (- (first (first move))
+        ^Integer my-diff (- (first (first move))
                    (first (second move)))
         castled? (when (and (is-king? piece)
                             (not (= 1 
@@ -875,6 +875,23 @@
                            player)) 
                       (:piece-locations position)))
       )))                     
+
+(comment
+(println locations-helper)
+  )
+
+
+
+;;; (def empty-board (string->position "" :white))
+;;; (println empty-board)
+;;; (do
+;;;   (def bishop-location-moves
+;;;   (reduce (fn[accum x] (assoc accum x (ranging-moves empty-board x bishop-rules))) {} locations-helper))
+;;;  ;; (println bishop-location-moves)
+;;;   
+;;;   )
+
+
 (defn moves[position]
   (when debug
     (println "entering moves")
@@ -891,6 +908,33 @@
                            ))
             (possible-moves position (:player-to-move position))
             )))
+
+(def piece-values-for-ordering {:p 1 :n 3 :b 3 :q 9 :r 5 
+                                :k 0  :K 0   :P 1 :N 3 :B 3 :Q 9 :R 5})
+
+(defn is-capture?[position move]
+  (if (piece-at-location position (second move))
+    true
+    false)
+  )
+(defn order-moves[position moves]
+  "For minimax with alpha beta, we want to have the moves roughly in order
+  of strength. Here I prioritize captures and within captures, captures by week pieces"
+  (sort-by (fn[move] 
+             (let [x (if (is-capture? position move)
+                         100
+                         0)
+                   my-piece (piece-at-location position (first move))
+                   my-piece-value 
+                     (if (is-capture? position move)
+                       (get piece-values-for-ordering my-piece 0)
+                       0)
+                   ]
+               (- (- x my-piece-value))
+  )) moves))
+
+(comment
+  (println (sort-by even? [1 4 3 1 3])))
 
 (defn update-status[position]
   (assoc position :status
@@ -1032,12 +1076,19 @@
         "k\n"
         "n  p\n"
         " p  P  K\n"
-        " P      \n"
-        "        \n"
+        " P Q    \n"
+        "P       \n"
         "        \n"
         "        \n"
         "        \n"
                            ) :white))
+
+(comment
+  (do
+  (display ez)
+  (println (map move->san (order-moves ez (moves ez))))
+ ) 
+  )
 (def ez-black (flip-position ez))
 ;; (display ez)
 (def simple-str
@@ -1067,11 +1118,6 @@
 ;;(println 
 ;; (string->position starting-position-string :black))
 
-(defn is-capture?[position move]
-  (if (piece-at-location position (second move))
-    true
-    false)
-  )
 
 (defn looks-like-castling-move[move]
   (= 4 (count move)))
@@ -1186,6 +1232,7 @@
 
 ;; set king to 0 for now
 ;;
+
 (def whites-piece-value-lookup {:p -1 :n -3 :b -3 :q -9 :r -5 
                                 :k 0  :K 0   :P 1 :N 3 :B 3 :Q 9 :R 5})
 
@@ -1203,15 +1250,6 @@
 locations-under-attack
 
   )
-(def MOBILITY-WEIGHT 0.01)
-;; (println (mobility after-e4))
-(defn mobility[position]
-  "Mobility factor from the point of view of CURRENT PLAYER. Higher is better"
-  (let [
-        ary (if (white-to-move? position) [:white :black] [:black :white])
-        ]
-        (* MOBILITY-WEIGHT
-     (apply - (map (fn[x] (count (locations-under-attack-by position x)))  ary)))))
 
 (def white-pieces #{:K :Q :B :N :R :P})
 (def black-pieces #{:k :q :b :n :r :p})
@@ -1287,8 +1325,17 @@ locations-under-attack
 
 (def infinity 10000)
 
+(def MOBILITY-WEIGHT 1)
+;; (println (mobility after-e4))
+(defn mobility[position]
+  "Mobility factor from the point of view of CURRENT PLAYER. Higher is better"
+  (let [
+        ary (if (white-to-move? position) [:white :black] [:black :white])
+        ]
+        (* MOBILITY-WEIGHT
+     (apply - (map (fn[x] (count (locations-under-attack-by position x)))  ary)))))
 
-(defn evaluate[position]
+(defn evaluate ^long [position]
   {
    :pre [(is-position? position)]
    :post  [(number? %)]
@@ -1312,8 +1359,8 @@ locations-under-attack
                  whites-piece-value-lookup
                  blacks-piece-value-lookup)]
           (+  (mobility position)
-             (apply + (map #(get tbl %) 
-                           (map second (:piece-locations position))))))))
+             (* 100 (apply + (map #(get tbl %) 
+                           (map second (:piece-locations position)))))))))
 
 (def white-ahead-in-material (string->position "QK  nk" :white))
 (def white-behind-in-material (string->position "KN  kq" :white))
@@ -1419,11 +1466,8 @@ locations-under-attack
 ;; (make-move starting-position (first (moves starting-position)))
 ;; (pprint (map evaluate (generate-moves starting-position)))
 ;;
-(defn order-moves[nodes]
-  nodes
-  )
 
-(def MINIMAX-DEPTH 2)
+(def MINIMAX-DEPTH 3)
 
 (defn minimax[pos depth]
   {:pre [
@@ -1445,22 +1489,26 @@ locations-under-attack
     ;; Find best possible move. 
 
     (loop [moves (moves pos)
-           best-score -99999
+            best-score (long -9999)
            best-path nil]
       (when debug
         (println "in loop, first of moves is" (move->san (first moves))))
       (if (empty? moves) 
         (do
-        (when debug (println "best score was " best-score))
+        (when false (println 
+                    (join " " 
+                     (map move->san (reverse best-path)))
+                     "->" best-score))
         [best-score best-path]              
           )
         (let [
               move (first moves) 
+              _ (when false (println "Examining " (move->san move)))
               successor (make-move pos move)
               ;; destructure
-              [zz-new-value new-path] (minimax successor (dec depth)
+              [long zz-new-value new-path] (minimax successor (dec depth)
                                                )
-              new-value (- zz-new-value)  ;; 
+              new-value (- (long zz-new-value))  ;; 
               _ (when debug
                       (println "new-value for " (move->san move) " is " 
                                new-value))
@@ -1477,6 +1525,80 @@ locations-under-attack
                    best-path)
             ))
         ))))
+;; (println (evaluate ez))
+(defn minimax-a-b[pos depth my-use-thresh my-pass-thresh]
+  {:pre [
+         (is-position? pos) 
+         (number? depth)
+         (number? my-use-thresh)
+         (number? my-pass-thresh)
+         ]
+   :post [ (= 2 (count %))
+          (is-score? (first %))]
+   }
+  (cond 
+    ;; Terminate when maximum depth is reached or position
+    ;; is in a terminal state
+    (or (zero? depth)  ;;; 
+        (won? pos :white)  ;;  are both these possible???? 
+        (won? pos :black?)
+        (drawn? pos))
+    [(evaluate pos) ()]
+    true
+    ;; Find best possible move. 
+
+    (loop [moves (order-moves pos (moves pos))
+           best-path nil
+           use-thresh my-use-thresh 
+           pass-thresh my-pass-thresh
+           ]
+           (when debug (println "moves:" moves))
+       (if (empty? moves)
+        [pass-thresh best-path]              
+        (let [
+              move (first moves) 
+              successor (make-move pos move)
+              [zz-new-value new-path] 
+              (minimax-a-b successor 
+                       (dec depth)
+                       (- pass-thresh)
+                       (- use-thresh))
+              new-value (- zz-new-value) 
+              new-pass-thresh (if (> new-value pass-thresh)
+                                new-value
+                                pass-thresh)
+              new-best-path (if (> new-value pass-thresh)
+                              (conj new-path move)
+                              best-path)
+              ]
+          (cond 
+            (>= new-pass-thresh use-thresh)
+            (do 
+              ;;(println "pruning")
+            [new-pass-thresh new-best-path]
+                )
+            true
+            (recur (rest moves)
+                   new-best-path
+                   use-thresh
+                   new-pass-thresh
+                   ) 
+            ))
+         ))))
+;; (pprint (choose-move2 starting-position))
+(defn choose-move2[position]
+  (let [ [score path]
+        (minimax-a-b position 3 99999 -99999)
+        ]
+    {:score score :path (map move->san path) }
+  ))
+
+(defn choose-move[position]
+  (let [ [score path]
+        (minimax-a-b position MINIMAX-DEPTH 99999 -99999)]
+    (println "score: " score (join " " (map move->san path)))
+    (first path)
+    ))
 
 (defn run-minimax[pos depth]
     (display pos)
@@ -1486,12 +1608,14 @@ locations-under-attack
     ))
 ;; (run-minimax starting-position MINIMAX-DEPTH) 
 ;; (println (minimax starting-position 2) )
-;;(comment
-;;(println
-;; (choose-move
- ;;  (make-move starting-position (choose-move starting-position)))
- ;; ))
-(defn choose-move[position]
+(comment
+  (use 'clojure.stacktrace)
+  (print-stack-trace *e)
+  (println (choose-move starting-position))
+  (println choose-move
+  (make-move starting-position (choose-move starting-position)))
+ )
+(defn old-choose-move[position]
   ;; returns best move !!!
   (let [z (minimax position MINIMAX-DEPTH)]
     (last (second  z))

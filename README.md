@@ -1,5 +1,7 @@
 # chess_clojure
 
+eboard seems to work well on Linux!
+
 Using chess_clojure with chess graphical user interfaces:
 
 Create an executable with
